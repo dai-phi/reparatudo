@@ -1,90 +1,256 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Send, User, Wrench, Star, Phone, MapPin, DollarSign, Check, X, AlertCircle } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, Send, Wrench, Star, Phone, MapPin, DollarSign, Check, X } from "lucide-react";
+import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ApiError,
+  ChatMessage,
+  cancelRequest,
+  completeRequest,
+  confirmRequest,
+  getMessages,
+  getRequest,
+  sendMessage,
+} from "@/lib/api";
+import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
+import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 
-interface Message {
-  id: number;
-  from: "client" | "provider" | "system";
-  text: string;
-  time: string;
-}
+type UiStatus = "negotiating" | "confirmed" | "cancelled" | "completed";
 
-type ServiceStatus = "negotiating" | "confirmed" | "cancelled" | "completed";
+const getUiStatus = (status?: string): UiStatus => {
+  switch (status) {
+    case "open":
+    case "accepted":
+      return "negotiating";
+    case "confirmed":
+      return "confirmed";
+    case "completed":
+      return "completed";
+    case "cancelled":
+    case "rejected":
+      return "cancelled";
+    default:
+      return "negotiating";
+  }
+};
 
-const initialMessages: Message[] = [
-  { id: 1, from: "provider", text: "Olá! Aceite seu pedido. Vamos negociar o valor do serviço?", time: "14:30" },
-  { id: 2, from: "client", text: "Ótimo! Qual seria o valor?", time: "14:31" },
-  { id: 3, from: "provider", text: "Pelo que você descreveu, ficaria em torno de R$ 150,00. Pode ser?", time: "14:32" },
-];
+const statusBanner = (status: UiStatus) => {
+  switch (status) {
+    case "confirmed":
+      return { bg: "bg-success/10 border-success/30", text: "text-success", icon: Check, label: "Servico confirmado" };
+    case "cancelled":
+      return { bg: "bg-destructive/10 border-destructive/30", text: "text-destructive", icon: X, label: "Servico cancelado" };
+    case "completed":
+      return { bg: "bg-accent/10 border-accent/30", text: "text-accent", icon: Star, label: "Servico finalizado" };
+    default:
+      return { bg: "bg-warning/10 border-warning/30", text: "text-warning", icon: DollarSign, label: "Negociando valor" };
+  }
+};
 
 const Chat = () => {
   const { id } = useParams();
+  const requestId = id ?? "";
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  useRequireAuth("/login");
+  const { data: me } = useAuthUser();
+  const role = me?.role ?? "client";
+  const isClient = role === "client";
+
   const [input, setInput] = useState("");
-  const [status, setStatus] = useState<ServiceStatus>("negotiating");
   const [agreedValue, setAgreedValue] = useState("");
   const messagesEnd = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+
+  const addMessageToCache = useCallback((message: ChatMessage) => {
+    if (!requestId) return;
+    queryClient.setQueryData(["messages", requestId], (old?: ChatMessage[]) => {
+      if (!old) return [message];
+      if (old.some((item) => item.id === message.id)) return old;
+      return [...old, message];
+    });
+  }, [queryClient, requestId]);
+
+  const requestQuery = useQuery({
+    queryKey: ["request", requestId],
+    queryFn: () => getRequest(requestId),
+    enabled: Boolean(requestId),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+  });
+
+  const messagesQuery = useQuery({
+    queryKey: ["messages", requestId],
+    queryFn: () => getMessages(requestId),
+    enabled: Boolean(requestId),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: (text: string) => sendMessage(requestId, text),
+    onSuccess: (message) => {
+      addMessageToCache(message);
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : "Nao foi possivel enviar a mensagem";
+      toast.error(message);
+    },
+  });
+
+  const confirmMutation = useMutation({
+    mutationFn: (value?: string) => confirmRequest(requestId, value),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["request", requestId], data.request);
+      queryClient.setQueryData(["messages", requestId], (old?: any[]) => {
+        if (!old) return [data.message];
+        return [...old, data.message];
+      });
+      toast.success("Servico confirmado!");
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : "Nao foi possivel confirmar o servico";
+      toast.error(message);
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelRequest(requestId),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["request", requestId], data.request);
+      queryClient.setQueryData(["messages", requestId], (old?: any[]) => {
+        if (!old) return [data.message];
+        return [...old, data.message];
+      });
+      toast("Servico cancelado");
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : "Nao foi possivel cancelar o servico";
+      toast.error(message);
+    },
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: () => completeRequest(requestId),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["request", requestId], data.request);
+      queryClient.setQueryData(["messages", requestId], (old?: any[]) => {
+        if (!old) return [data.message];
+        return [...old, data.message];
+      });
+      toast.success("Servico finalizado!");
+      navigate("/provider/dashboard");
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : "Nao foi possivel finalizar o servico";
+      toast.error(message);
+    },
+  });
+
+  const handleSocketEvent = useCallback(
+    (event: WebsocketEvent) => {
+      if (!requestId || event.requestId !== requestId) return;
+      if (event.type === "chat.message" && event.payload) {
+        addMessageToCache(event.payload);
+      }
+      if (event.type === "request.updated" && event.payload) {
+        queryClient.setQueryData(["request", requestId], event.payload);
+        if (event.payload.status === "completed") {
+          if (isClient) {
+            navigate("/client/home", { state: { openHistory: true, rateRequestId: requestId } });
+          } else {
+            navigate("/provider/dashboard");
+          }
+        }
+      }
+    },
+    [addMessageToCache, queryClient, requestId, isClient, navigate]
+  );
+
+  useWebsocket({
+    requestId,
+    enabled: Boolean(requestId),
+    onEvent: handleSocketEvent,
+  });
+
+  useEffect(() => {
+    const req = requestQuery.data;
+    if (!req || req.status !== "completed") return;
+    if (isClient) {
+      navigate("/client/home", { state: { openHistory: true, rateRequestId: requestId } });
+    } else {
+      navigate("/provider/dashboard");
+    }
+  }, [requestQuery.data?.status, isClient, requestId, navigate]);
 
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messagesQuery.data]);
 
-  const now = () => new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-
-  const addSystemMessage = (text: string) => {
-    setMessages((prev) => [...prev, { id: Date.now(), from: "system", text, time: now() }]);
-  };
-
-  const sendMessage = () => {
-    if (!input.trim()) return;
-    setMessages((prev) => [...prev, { id: Date.now(), from: "client", text: input, time: now() }]);
+  const sendMessageHandler = () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
     setInput("");
+    sendMutation.mutate(trimmed);
   };
 
-  const handleConfirmService = () => {
-    setStatus("confirmed");
-    addSystemMessage(`✅ Serviço confirmado! Valor acordado: ${agreedValue || "a combinar"}. O prestador está a caminho.`);
-    toast.success("Serviço confirmado! O prestador está a caminho.");
-  };
+  if (!requestId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+        Conversa nao encontrada.
+      </div>
+    );
+  }
 
-  const handleCancelService = () => {
-    setStatus("cancelled");
-    addSystemMessage("❌ Serviço cancelado pelo cliente.");
-    toast("Serviço cancelado");
-  };
+  if (requestQuery.isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+        Carregando conversa...
+      </div>
+    );
+  }
 
-  const handleCompleteService = () => {
-    setStatus("completed");
-    addSystemMessage("🎉 Serviço finalizado! Obrigado por usar o FixJá.");
-    toast.success("Serviço finalizado!");
-  };
+  if (requestQuery.isError || !requestQuery.data) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-muted-foreground gap-4">
+        Nao foi possivel carregar o chat.
+        <Button variant="hero" onClick={() => navigate(isClient ? "/client/home" : "/provider/dashboard")}>Voltar</Button>
+      </div>
+    );
+  }
 
-  const statusBanner = () => {
-    switch (status) {
-      case "negotiating":
-        return { bg: "bg-warning/10 border-warning/30", text: "text-warning", icon: DollarSign, label: "Negociando valor" };
-      case "confirmed":
-        return { bg: "bg-success/10 border-success/30", text: "text-success", icon: Check, label: "Serviço confirmado" };
-      case "cancelled":
-        return { bg: "bg-destructive/10 border-destructive/30", text: "text-destructive", icon: X, label: "Serviço cancelado" };
-      case "completed":
-        return { bg: "bg-accent/10 border-accent/30", text: "text-accent", icon: Star, label: "Serviço finalizado" };
-    }
-  };
-
-  const banner = statusBanner();
+  const request = requestQuery.data;
+  const messages = messagesQuery.data ?? [];
+  const uiStatus = getUiStatus(request.status);
+  const banner = statusBanner(uiStatus);
+  const headerName = isClient ? request.provider?.name ?? "Aguardando prestador" : request.client?.name ?? "Cliente";
+  const headerRating = isClient ? request.provider?.rating ?? 0 : 0;
+  const headerDistance = isClient ? request.provider?.distanceKm ?? 0 : 0;
+  const backPath = isClient ? "/client/home" : "/provider/dashboard";
+  const clientConfirmed = Boolean(request.clientConfirmed);
+  const providerConfirmed = Boolean(request.providerConfirmed);
+  const canConfirm = uiStatus === "negotiating" && ((isClient && !clientConfirmed) || (!isClient && !providerConfirmed));
+  const canComplete = !isClient && uiStatus === "confirmed";
+  const canCancel = uiStatus === "negotiating";
+  const waitingOther = isClient ? clientConfirmed && !providerConfirmed : providerConfirmed && !clientConfirmed;
+  const providerPhone = request.provider?.phone ?? "";
+  const agreedValueText = request.agreedValue > 0 ? request.agreedValueLabel : "a combinar";
+  const whatsappDigits = providerPhone.replace(/\D/g, "");
+  const whatsappUrl = whatsappDigits
+    ? `https://wa.me/${whatsappDigits.startsWith("55") ? whatsappDigits : `55${whatsappDigits}`}`
+    : "";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-primary border-b border-primary/20">
         <div className="container flex items-center gap-4 h-16">
-          <Link to="/client/home" className="text-primary-foreground/70 hover:text-primary-foreground">
+          <Link to={backPath} className="text-primary-foreground/70 hover:text-primary-foreground">
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="flex items-center gap-3 flex-1">
@@ -92,17 +258,27 @@ const Chat = () => {
               <Wrench className="w-5 h-5 text-accent" />
             </div>
             <div>
-              <p className="font-semibold text-primary-foreground">Carlos Mendes</p>
-              <div className="flex items-center gap-2 text-xs text-primary-foreground/60">
-                <Star className="w-3 h-3 text-accent fill-accent" /> 4.9
-                <span>•</span>
-                <MapPin className="w-3 h-3" /> 2.3 km
-              </div>
+              <p className="font-semibold text-primary-foreground">{headerName}</p>
+              {isClient && request.provider ? (
+                <div className="flex items-center gap-2 text-xs text-primary-foreground/60">
+                  <Star className="w-3 h-3 text-accent fill-accent" /> {headerRating.toFixed(1)}
+                  <span>•</span>
+                  <MapPin className="w-3 h-3" /> {headerDistance.toFixed(1)} km
+                </div>
+              ) : (
+                <div className="text-xs text-primary-foreground/60">{request.serviceLabel}</div>
+              )}
             </div>
           </div>
-          <button className="p-2 text-primary-foreground/70 hover:text-primary-foreground">
-            <Phone className="w-5 h-5" />
-          </button>
+          {uiStatus === "confirmed" && isClient && whatsappUrl ? (
+            <a href={whatsappUrl} target="_blank" rel="noreferrer" className="p-2 text-primary-foreground/70 hover:text-primary-foreground">
+              <Phone className="w-5 h-5" />
+            </a>
+          ) : (
+            <button className="p-2 text-primary-foreground/40" disabled>
+              <Phone className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </header>
 
@@ -113,73 +289,112 @@ const Chat = () => {
             <banner.icon className={`w-4 h-4 ${banner.text}`} />
             <span className={`text-sm font-medium ${banner.text}`}>{banner.label}</span>
           </div>
+          {request.agreedValue > 0 && (
+            <span className="text-xs text-muted-foreground">Valor: {request.agreedValueLabel}</span>
+          )}
         </div>
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.map((msg) => (
-          <motion.div
-            key={msg.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`flex ${msg.from === "client" ? "justify-end" : msg.from === "system" ? "justify-center" : "justify-start"}`}
-          >
-            {msg.from === "system" ? (
-              <div className="px-4 py-2 rounded-xl bg-muted text-muted-foreground text-sm text-center max-w-[85%]">
-                {msg.text}
-              </div>
-            ) : (
-              <div
-                className={`max-w-[75%] px-4 py-3 rounded-2xl ${
-                  msg.from === "client"
-                    ? "bg-accent text-accent-foreground rounded-br-md"
-                    : "bg-card text-card-foreground border border-border rounded-bl-md"
-                }`}
+        {messagesQuery.isLoading ? (
+          <div className="text-center text-muted-foreground">Carregando mensagens...</div>
+        ) : (
+          messages.map((msg) => {
+            const isSystem = msg.from === "system";
+            const isOwn = msg.from === role;
+            return (
+              <motion.div
+                key={msg.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`flex ${isSystem ? "justify-center" : isOwn ? "justify-end" : "justify-start"}`}
               >
-                <p className="text-sm">{msg.text}</p>
-                <p className={`text-xs mt-1 ${msg.from === "client" ? "text-accent-foreground/60" : "text-muted-foreground"}`}>
-                  {msg.time}
-                </p>
-              </div>
-            )}
-          </motion.div>
-        ))}
+                {isSystem ? (
+                  <div className="px-4 py-2 rounded-xl bg-muted text-muted-foreground text-sm text-center max-w-[85%]">
+                    {msg.text}
+                  </div>
+                ) : (
+                  <div
+                    className={`max-w-[75%] px-4 py-3 rounded-2xl ${
+                      isOwn
+                        ? "bg-accent text-accent-foreground rounded-br-md"
+                        : "bg-card text-card-foreground border border-border rounded-bl-md"
+                    }`}
+                  >
+                    <p className="text-sm">{msg.text}</p>
+                    <p className={`text-xs mt-1 ${isOwn ? "text-accent-foreground/60" : "text-muted-foreground"}`}>
+                      {msg.time}
+                    </p>
+                  </div>
+                )}
+              </motion.div>
+            );
+          })
+        )}
         <div ref={messagesEnd} />
       </div>
 
-      {/* Action bar based on status */}
-      {status === "negotiating" && (
+      {(uiStatus === "negotiating" || uiStatus === "confirmed") && (
         <div className="bg-card border-t border-border p-4">
           <div className="container space-y-3">
-            {/* Value input */}
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-muted">
-              <DollarSign className="w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Valor acordado (ex: R$ 150,00)"
-                value={agreedValue}
-                onChange={(e) => setAgreedValue(e.target.value)}
-                className="border-0 bg-transparent h-8 focus-visible:ring-0 focus-visible:ring-offset-0"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button variant="hero" size="sm" className="flex-1" onClick={handleConfirmService}>
-                <Check className="w-4 h-4" /> Confirmar Serviço
-              </Button>
-              <Button variant="outline" size="sm" className="flex-1" onClick={handleCancelService}>
-                <X className="w-4 h-4" /> Cancelar
-              </Button>
-            </div>
-            {/* Chat input */}
+            {canConfirm && (
+              <>
+                {isClient ? (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-muted">
+                    <DollarSign className="w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Valor acordado (ex: R$ 150,00)"
+                      value={agreedValue}
+                      onChange={(e) => setAgreedValue(e.target.value)}
+                      className="border-0 bg-transparent h-8 focus-visible:ring-0 focus-visible:ring-offset-0"
+                    />
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    Valor combinado: {agreedValueText}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    variant="hero"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => confirmMutation.mutate(isClient ? agreedValue : undefined)}
+                    disabled={confirmMutation.isPending}
+                  >
+                    <Check className="w-4 h-4" /> Confirmar Servico
+                  </Button>
+                  {canCancel && (
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => cancelMutation.mutate()} disabled={cancelMutation.isPending}>
+                      <X className="w-4 h-4" /> Cancelar
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
+
+            {waitingOther && (
+              <div className="text-sm text-muted-foreground">Aguardando confirmacao da outra parte.</div>
+            )}
+
+            {canComplete && (
+              <div className="flex gap-2">
+                <Button variant="hero" size="sm" className="flex-1" onClick={() => completeMutation.mutate()} disabled={completeMutation.isPending}>
+                  <Check className="w-4 h-4" /> Finalizar Servico
+                </Button>
+              </div>
+            )}
+
             <div className="flex gap-3">
               <Input
                 placeholder="Digite sua mensagem..."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                onKeyDown={(e) => e.key === "Enter" && sendMessageHandler()}
                 className="flex-1"
               />
-              <Button variant="hero" size="icon" onClick={sendMessage} disabled={!input.trim()}>
+              <Button variant="hero" size="icon" onClick={sendMessageHandler} disabled={!input.trim() || sendMutation.isPending}>
                 <Send className="w-4 h-4" />
               </Button>
             </div>
@@ -187,41 +402,14 @@ const Chat = () => {
         </div>
       )}
 
-      {status === "confirmed" && (
-        <div className="bg-card border-t border-border p-4">
-          <div className="container space-y-3">
-            <div className="flex gap-2">
-              <Button variant="hero" size="sm" className="flex-1" onClick={handleCompleteService}>
-                <Check className="w-4 h-4" /> Finalizar Serviço
-              </Button>
-              <Button variant="outline" size="sm" className="flex-1" onClick={handleCancelService}>
-                <X className="w-4 h-4" /> Cancelar Serviço
-              </Button>
-            </div>
-            <div className="flex gap-3">
-              <Input
-                placeholder="Digite sua mensagem..."
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                className="flex-1"
-              />
-              <Button variant="hero" size="icon" onClick={sendMessage} disabled={!input.trim()}>
-                <Send className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {(status === "cancelled" || status === "completed") && (
+      {(uiStatus === "cancelled" || uiStatus === "completed") && (
         <div className="bg-card border-t border-border p-4">
           <div className="container text-center space-y-3">
             <p className="text-sm text-muted-foreground">
-              {status === "completed" ? "Serviço finalizado! Avalie o prestador na aba de histórico." : "Serviço cancelado."}
+              {uiStatus === "completed" ? "Servico finalizado! Redirecionando..." : "Servico cancelado."}
             </p>
-            <Button variant="hero" size="sm" onClick={() => navigate("/client/home")}>
-              Voltar ao Início
+            <Button variant="hero" size="sm" onClick={() => navigate(backPath)}>
+              Voltar ao Inicio
             </Button>
           </div>
         </div>

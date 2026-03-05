@@ -31,6 +31,9 @@ const Index = () => {
             <span className="font-display text-xl font-bold text-foreground">FixJá</span>
           </Link>
           <div className="flex items-center gap-3">
+            <Link to="/login">
+              <Button variant="ghost" size="sm">Entrar</Button>
+            </Link>
             <Link to="/provider/register">
               <Button variant="ghost" size="sm">Sou Profissional</Button>
             </Link>

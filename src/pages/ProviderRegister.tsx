@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Wrench, Zap, Droplets, PaintBucket, Hammer, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { ApiError, registerProvider, setAuth } from "@/lib/api";
 
 const serviceOptions = [
   { id: "eletrica", icon: Zap, label: "Elétrica" },
@@ -19,7 +20,8 @@ const ProviderRegister = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", cpf: "", radius: "10" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", cpf: "", radius: "10", password: "", workCep: "", photoUrl: "" });
+  const [loading, setLoading] = useState(false);
 
   const toggleService = (id: string) => {
     setSelectedServices((prev) =>
@@ -27,9 +29,30 @@ const ProviderRegister = () => {
     );
   };
 
-  const handleSubmit = () => {
-    toast.success("Cadastro realizado com sucesso!");
-    navigate("/provider/dashboard");
+  const handleSubmit = async () => {
+    const workCepNumeric = form.workCep.replace(/\D/g, "");
+    setLoading(true);
+    try {
+      const auth = await registerProvider({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        cpf: form.cpf.trim() || undefined,
+        radiusKm: Number(form.radius) || 10,
+        services: selectedServices,
+        workCep: workCepNumeric,
+        photoUrl: form.photoUrl.trim() || undefined,
+        password: form.password,
+      });
+      setAuth(auth);
+      toast.success("Cadastro realizado com sucesso!");
+      navigate("/provider/dashboard");
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : "Não foi possível concluir o cadastro";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -100,7 +123,19 @@ const ProviderRegister = () => {
                 <Label htmlFor="cpf">CPF</Label>
                 <Input id="cpf" placeholder="000.000.000-00" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} />
               </div>
-              <Button className="w-full" size="lg" onClick={() => setStep(2)} disabled={!form.name || !form.email}>
+              <div>
+                <Label htmlFor="workCep">CEP do local de trabalho</Label>
+                <Input id="workCep" placeholder="00000-000" value={form.workCep} onChange={(e) => setForm({ ...form, workCep: e.target.value })} required />
+              </div>
+              <div>
+                <Label htmlFor="photoUrl">Foto (URL)</Label>
+                <Input id="photoUrl" placeholder="https://..." value={form.photoUrl} onChange={(e) => setForm({ ...form, photoUrl: e.target.value })} />
+              </div>
+              <div>
+                <Label htmlFor="password">Senha</Label>
+                <Input id="password" type="password" placeholder="Crie uma senha" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+              </div>
+              <Button className="w-full" size="lg" onClick={() => setStep(2)} disabled={!form.name || !form.email || !form.password || !form.workCep}>
                 Continuar
               </Button>
             </div>
@@ -145,7 +180,7 @@ const ProviderRegister = () => {
                 <Button variant="outline" className="flex-1" size="lg" onClick={() => setStep(1)}>
                   Voltar
                 </Button>
-                <Button variant="hero" className="flex-1" size="lg" onClick={handleSubmit} disabled={selectedServices.length === 0}>
+                <Button variant="hero" className="flex-1" size="lg" onClick={handleSubmit} disabled={selectedServices.length === 0 || loading}>
                   Cadastrar
                 </Button>
               </div>

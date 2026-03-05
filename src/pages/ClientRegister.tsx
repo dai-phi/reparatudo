@@ -6,15 +6,35 @@ import { Label } from "@/components/ui/label";
 import { Wrench, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { ApiError, registerClient, setAuth } from "@/lib/api";
 
 const ClientRegister = () => {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "", email: "", phone: "", address: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", cep: "", password: "" });
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Cadastro realizado!");
-    navigate("/client/home");
+    const cepNumeric = form.cep.replace(/\D/g, "");
+    setLoading(true);
+    try {
+      const auth = await registerClient({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        address: form.address.trim() || undefined,
+        cep: cepNumeric,
+        password: form.password,
+      });
+      setAuth(auth);
+      toast.success("Cadastro realizado!");
+      navigate("/client/home");
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : "Não foi possível concluir o cadastro";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -76,7 +96,15 @@ const ClientRegister = () => {
               <Label htmlFor="address">Endereço</Label>
               <Input id="address" placeholder="Rua, número, bairro" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             </div>
-            <Button variant="hero" size="lg" className="w-full" type="submit">
+            <div>
+              <Label htmlFor="cep">CEP</Label>
+              <Input id="cep" placeholder="00000-000" value={form.cep} onChange={(e) => setForm({ ...form, cep: e.target.value })} required />
+            </div>
+            <div>
+              <Label htmlFor="password">Senha</Label>
+              <Input id="password" type="password" placeholder="Crie uma senha" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+            </div>
+            <Button variant="hero" size="lg" className="w-full" type="submit" disabled={loading}>
               Criar Conta
             </Button>
           </form>

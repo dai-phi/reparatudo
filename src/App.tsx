@@ -10,6 +10,7 @@ import ProviderDashboard from "./pages/ProviderDashboard";
 import ClientRegister from "./pages/ClientRegister";
 import ClientHome from "./pages/ClientHome";
 import Chat from "./pages/Chat";
+import Login from "./pages/Login";
 
 const queryClient = new QueryClient();
 
@@ -25,6 +26,7 @@ const App = () => (
           <Route path="/provider/dashboard" element={<ProviderDashboard />} />
           <Route path="/client/register" element={<ClientRegister />} />
           <Route path="/client/home" element={<ClientHome />} />
+          <Route path="/login" element={<Login />} />
           <Route path="/chat/:id" element={<Chat />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

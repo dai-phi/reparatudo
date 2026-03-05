@@ -60,6 +60,37 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Backend (Fastify)
+
+API local padrao: `http://localhost:3333`
+
+Scripts:
+
+```sh
+npm run dev:server
+```
+
+Variaveis de ambiente sugeridas:
+
+```sh
+DATABASE_URL=postgresql://usuario:senha@host/banco?sslmode=require
+JWT_SECRET=uma-chave-segura
+PORT=3333
+HOST=0.0.0.0
+```
+
+Para apontar o front-end para outro host, defina `VITE_API_URL` no `.env.local`:
+
+```sh
+VITE_API_URL=http://localhost:3333
+```
+
+Autenticacao atual usa e-mail + senha.
+
+Observacoes:
+- CEP do cliente e do prestador sao usados para validar raio (usa BrasilAPI/Nominatim para coordenadas).
+- O chat abre apos o prestador aceitar e ambos confirmarem o servico.
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.

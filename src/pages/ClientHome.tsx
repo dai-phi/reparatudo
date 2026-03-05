@@ -1,14 +1,18 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
-  Wrench, Zap, Droplets, PaintBucket, Hammer, MapPin, User, Bell,
+  Wrench, Zap, Droplets, PaintBucket, Hammer, User, Bell, LogOut,
   Search, ArrowRight, Loader2, ClipboardList, Star
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { ApiError, clearAuth, createRating, createServiceRequest, getClientHistory, getProviders, getRequest } from "@/lib/api";
+import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
+import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 
 const services = [
   { id: "eletrica", icon: Zap, label: "Elétrica", desc: "Tomadas, fiação, disjuntores", color: "from-yellow-400 to-amber-500" },
@@ -16,12 +20,6 @@ const services = [
   { id: "pintura", icon: PaintBucket, label: "Pintura", desc: "Paredes, tetos, fachadas", color: "from-pink-400 to-rose-500" },
   { id: "montagem", icon: Hammer, label: "Montagem", desc: "Móveis, prateleiras", color: "from-orange-400 to-red-500" },
   { id: "reparos", icon: Wrench, label: "Reparos Gerais", desc: "Diversos serviços", color: "from-emerald-400 to-green-500" },
-];
-
-const mockCompletedServices = [
-  { id: 1, provider: "Carlos Mendes", service: "Elétrica", desc: "Troca de tomada na cozinha", date: "28/02/2026", value: "R$ 120,00", rated: false, rating: 0, review: "" },
-  { id: 2, provider: "João Pereira", service: "Hidráulica", desc: "Conserto de vazamento no banheiro", date: "20/02/2026", value: "R$ 250,00", rated: true, rating: 5, review: "Excelente profissional!" },
-  { id: 3, provider: "Roberto Lima", service: "Pintura", desc: "Pintura da sala de estar", date: "10/02/2026", value: "R$ 800,00", rated: true, rating: 4, review: "Bom trabalho, pontual." },
 ];
 
 const StarRating = ({ rating, onRate, interactive = true }: { rating: number; onRate?: (r: number) => void; interactive?: boolean }) => {
@@ -51,46 +49,148 @@ const StarRating = ({ rating, onRate, interactive = true }: { rating: number; on
   );
 };
 
+type LocationState = { openHistory?: boolean; rateRequestId?: string } | null;
+
 const ClientHome = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  useRequireAuth("/login");
+  const { data: me } = useAuthUser();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"request" | "history">("request");
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [description, setDescription] = useState("");
-  const [searching, setSearching] = useState(false);
-  const [locationGranted, setLocationGranted] = useState(false);
-  const [completedServices, setCompletedServices] = useState(mockCompletedServices);
-  const [ratingServiceId, setRatingServiceId] = useState<number | null>(null);
+  const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
+  const [ratingServiceId, setRatingServiceId] = useState<string | null>(null);
   const [tempRating, setTempRating] = useState(0);
   const [tempReview, setTempReview] = useState("");
 
-  const requestLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        () => { setLocationGranted(true); toast.success("Localização obtida!"); },
-        () => toast.error("Não foi possível obter localização")
-      );
+  const selectedServiceMeta = services.find((service) => service.id === selectedService);
+
+  useEffect(() => {
+    if (me && me.role !== "client") {
+      navigate("/provider/dashboard");
     }
+  }, [me, navigate]);
+
+  useEffect(() => {
+    const state = location.state as LocationState;
+    if (state?.openHistory && state?.rateRequestId) {
+      setActiveTab("history");
+      setRatingServiceId(state.rateRequestId);
+      queryClient.invalidateQueries({ queryKey: ["clientHistory"] });
+      toast.success("Servico finalizado! Avalie o prestador abaixo (opcional).");
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate, queryClient]);
+
+  useEffect(() => {
+  }, [selectedService]);
+
+  const historyQuery = useQuery({
+    queryKey: ["clientHistory"],
+    queryFn: getClientHistory,
+    enabled: Boolean(me && me.role === "client"),
+  });
+
+  const providersQuery = useQuery({
+    queryKey: ["providers", selectedService],
+    queryFn: () => getProviders(selectedService || ""),
+    enabled: Boolean(selectedService),
+  });
+
+  const requestMutation = useMutation({
+    mutationFn: createServiceRequest,
+    onSuccess: (data) => {
+      setPendingRequestId(data.requestId);
+      toast.success("Pedido enviado! Aguardando aceite do prestador.");
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : "Nao foi possivel criar o pedido";
+      toast.error(message);
+    },
+  });
+
+  const ratingMutation = useMutation({
+    mutationFn: createRating,
+    onSuccess: () => {
+      toast.success("Avaliacao enviada! Obrigado.");
+      setRatingServiceId(null);
+      setTempRating(0);
+      setTempReview("");
+      queryClient.invalidateQueries({ queryKey: ["clientHistory"] });
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : "Nao foi possivel enviar a avaliacao";
+      toast.error(message);
+    },
+  });
+
+  const pendingRequestQuery = useQuery({
+    queryKey: ["request", pendingRequestId],
+    queryFn: () => getRequest(pendingRequestId || ""),
+    enabled: Boolean(pendingRequestId),
+    refetchInterval: 10000,
+  });
+
+  const searching = requestMutation.isPending || pendingRequestQuery.isFetching;
+  const completedServices = historyQuery.data ?? [];
+
+  const handleRequestWsEvent = useCallback(
+    (event: WebsocketEvent) => {
+      if (!pendingRequestId || event.requestId !== pendingRequestId) return;
+      if (event.type === "request.updated" && event.payload?.status === "accepted") {
+        navigate(`/chat/${pendingRequestId}`);
+      }
+      if (event.type === "request.updated" && (event.payload?.status === "rejected" || event.payload?.status === "cancelled")) {
+        toast.error("Prestador recusou ou cancelou o pedido.");
+        setPendingRequestId(null);
+      }
+    },
+    [pendingRequestId, navigate]
+  );
+
+  useWebsocket({
+    requestId: pendingRequestId ?? undefined,
+    enabled: Boolean(pendingRequestId),
+    onEvent: handleRequestWsEvent,
+  });
+
+  useEffect(() => {
+    if (!pendingRequestId || !pendingRequestQuery.data) return;
+    const status = pendingRequestQuery.data.status;
+    if (status === "accepted") {
+      navigate(`/chat/${pendingRequestId}`);
+    }
+    if (status === "rejected" || status === "cancelled") {
+      toast.error("Prestador recusou ou cancelou o pedido.");
+      setPendingRequestId(null);
+    }
+  }, [pendingRequestId, pendingRequestQuery.data, navigate]);
+
+  const handleLogout = () => {
+    clearAuth();
+    navigate("/");
   };
 
-  const handleRequest = () => {
-    if (!selectedService) { toast.error("Selecione um serviço"); return; }
-    setSearching(true);
-    setTimeout(() => {
-      setSearching(false);
-      toast.success("Profissional encontrado! Abrindo chat...");
-      navigate("/chat/1");
-    }, 3000);
+  const handleRequest = (providerId: string) => {
+    if (!selectedService) {
+      toast.error("Selecione um servico");
+      return;
+    }
+    requestMutation.mutate({
+      serviceId: selectedService,
+      description: description.trim() || undefined,
+      providerId,
+    });
   };
 
-  const submitRating = (id: number) => {
-    if (tempRating === 0) { toast.error("Selecione uma nota"); return; }
-    setCompletedServices((prev) =>
-      prev.map((s) => s.id === id ? { ...s, rated: true, rating: tempRating, review: tempReview } : s)
-    );
-    setRatingServiceId(null);
-    setTempRating(0);
-    setTempReview("");
-    toast.success("Avaliação enviada! Obrigado.");
+  const submitRating = (id: string) => {
+    if (tempRating === 0) {
+      toast.error("Selecione uma nota");
+      return;
+    }
+    ratingMutation.mutate({ requestId: id, rating: tempRating, review: tempReview.trim() || undefined });
   };
 
   return (
@@ -107,6 +207,9 @@ const ClientHome = () => {
           <div className="flex items-center gap-3">
             <button className="p-2 text-muted-foreground hover:text-foreground">
               <Bell className="w-5 h-5" />
+            </button>
+            <button className="p-2 text-muted-foreground hover:text-foreground" onClick={handleLogout}>
+              <LogOut className="w-5 h-5" />
             </button>
             <div className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center">
               <User className="w-5 h-5 text-accent" />
@@ -139,122 +242,206 @@ const ClientHome = () => {
 
         {activeTab === "request" ? (
           <>
-            {/* Location */}
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-              {!locationGranted ? (
-                <div className="p-5 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <MapPin className="w-6 h-6 text-accent" />
-                    <div>
-                      <p className="font-semibold text-foreground">Ative sua localização</p>
-                      <p className="text-sm text-muted-foreground">Para encontrar profissionais perto de você</p>
-                    </div>
-                  </div>
-                  <Button variant="hero" size="sm" onClick={requestLocation}>Ativar</Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-success">
-                  <MapPin className="w-5 h-5" />
-                  <span className="text-sm font-medium">Localização ativa • São Paulo, SP</span>
-                </div>
-              )}
-            </motion.div>
-
             <div className="mb-8">
               <h1 className="font-display text-2xl font-bold text-foreground mb-1">O que você precisa?</h1>
-              <p className="text-muted-foreground">Selecione o tipo de serviço</p>
+              <p className="text-muted-foreground">Selecione o tipo de serviço e chame um prestador</p>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-              {services.map((service) => {
-                const selected = selectedService === service.id;
-                return (
-                  <motion.button
-                    key={service.id}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => setSelectedService(service.id)}
-                    className={`flex flex-col items-center gap-3 p-6 rounded-xl border-2 transition-all text-center ${
-                      selected
-                        ? "border-accent bg-accent/5 shadow-elevated"
-                        : "border-border bg-card hover:border-accent/30 shadow-card"
-                    }`}
-                  >
-                    <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${service.color} flex items-center justify-center`}>
-                      <service.icon className="w-7 h-7 text-primary-foreground" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-card-foreground">{service.label}</p>
-                      <p className="text-xs text-muted-foreground">{service.desc}</p>
-                    </div>
-                  </motion.button>
-                );
-              })}
+            {selectedService && (
+              <div className="mb-8 space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div>
+                    <h2 className="font-display text-lg font-bold text-foreground">Prestadores Disponiveis</h2>
+                    <p className="text-sm text-muted-foreground">
+                      para {selectedServiceMeta?.label ?? "o serviço selecionado"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {services.map((service) => {
+                      const selected = selectedService === service.id;
+                      return (
+                        <button
+                          key={service.id}
+                          type="button"
+                          onClick={() => setSelectedService(service.id)}
+                          className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                            selected
+                              ? "bg-accent text-accent-foreground border-accent shadow-sm"
+                              : "bg-background border-border text-muted-foreground hover:border-accent/50"
+                          }`}
+                        >
+                          {service.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {providersQuery.isLoading ? (
+                  <div className="text-center text-muted-foreground py-8">Carregando prestadores...</div>
+                ) : providersQuery.isError ? (
+                  <div className="text-center text-muted-foreground py-8">Nao foi possivel carregar os prestadores.</div>
+                ) : (providersQuery.data?.length ?? 0) === 0 ? (
+                  <div className="text-center text-muted-foreground py-8">Nenhum prestador no raio informado.</div>
+                ) : (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {providersQuery.data?.map((provider) => {
+                      const avgLabel = provider.avgResponseMins >= 9999 ? "--" : `${provider.avgResponseMins} min`;
+                      return (
+                        <div
+                          key={provider.id}
+                          className="flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all border-border bg-card hover:border-accent/30"
+                        >
+                          {provider.photoUrl ? (
+                            <img src={provider.photoUrl} alt={provider.name} className="w-16 h-16 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center text-lg font-bold text-accent">
+                              {provider.name.charAt(0)}
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <p className="font-semibold text-card-foreground">{provider.name}</p>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Star className="w-4 h-4 text-warning fill-warning" />
+                              {provider.rating.toFixed(1)} • Tempo medio: {avgLabel}
+                            </div>
+                            <p className="text-xs text-muted-foreground">Distancia: {provider.distanceKm ?? "--"} km</p>
+                          </div>
+                          <Button
+                            variant="hero"
+                            size="sm"
+                            onClick={() => handleRequest(provider.id)}
+                            disabled={searching || Boolean(pendingRequestId)}
+                          >
+                            Chamar
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-display text-lg font-semibold text-foreground">
+                  {selectedService ? "Trocar serviço" : "Escolha um serviço"}
+                </h3>
+                {selectedService && (
+                  <span className="text-xs text-muted-foreground">
+                    Toque em outro serviço para ver novos prestadores.
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {services.map((service) => {
+                  const selected = selectedService === service.id;
+                  return (
+                    <motion.button
+                      key={service.id}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => setSelectedService(service.id)}
+                      className={`flex flex-col items-center gap-3 p-6 rounded-xl border-2 transition-all text-center ${
+                        selected
+                          ? "border-accent bg-accent/5 shadow-elevated"
+                          : "border-border bg-card hover:border-accent/30 shadow-card"
+                      }`}
+                    >
+                      <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${service.color} flex items-center justify-center`}>
+                        <service.icon className="w-7 h-7 text-primary-foreground" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-card-foreground">{service.label}</p>
+                        <p className="text-xs text-muted-foreground">{service.desc}</p>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
             </div>
 
             <AnimatePresence>
               {selectedService && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mb-8">
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mb-6"
+                >
                   <Label className="mb-2 block">Descreva o problema (opcional)</Label>
-                  <Textarea placeholder="Ex: A tomada da cozinha parou de funcionar..." value={description} onChange={(e) => setDescription(e.target.value)} className="resize-none" rows={3} />
+                  <Textarea
+                    placeholder="Ex: A tomada da cozinha parou de funcionar..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="resize-none"
+                    rows={3}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
 
-            <Button variant="hero" size="xl" className="w-full animate-pulse-glow" onClick={handleRequest} disabled={!selectedService || !locationGranted || searching}>
-              {searching ? (
-                <><Loader2 className="w-5 h-5 animate-spin" /> Buscando profissionais...</>
-              ) : (
-                <><Search className="w-5 h-5" /> Chamar Marido de Aluguel <ArrowRight className="w-5 h-5" /></>
-              )}
-            </Button>
+            {pendingRequestId && (
+              <div className="text-center text-sm text-muted-foreground">
+                Aguardando aceite do prestador selecionado...
+              </div>
+            )}
           </>
         ) : (
           /* History / Completed Services */
           <div className="space-y-4">
             <h2 className="font-display text-xl font-bold text-foreground">Serviços Realizados</h2>
-            {completedServices.map((svc) => (
-              <motion.div
-                key={svc.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="p-5 rounded-xl bg-card shadow-card border border-border"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="font-semibold text-card-foreground">{svc.provider}</p>
-                    <p className="text-sm text-muted-foreground">{svc.service} • {svc.date}</p>
+            {historyQuery.isLoading ? (
+              <div className="text-center py-12 text-muted-foreground">Carregando historico...</div>
+            ) : historyQuery.isError ? (
+              <div className="text-center py-12 text-muted-foreground">Nao foi possivel carregar o historico.</div>
+            ) : completedServices.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">Nenhum servico finalizado ainda.</div>
+            ) : (
+              completedServices.map((svc) => (
+                <motion.div
+                  key={svc.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-5 rounded-xl bg-card shadow-card border border-border"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="font-semibold text-card-foreground">{svc.provider}</p>
+                      <p className="text-sm text-muted-foreground">{svc.service} • {svc.date}</p>
+                    </div>
+                    <span className="text-sm font-bold text-accent">{svc.value}</span>
                   </div>
-                  <span className="text-sm font-bold text-accent">{svc.value}</span>
-                </div>
-                <p className="text-sm text-muted-foreground mb-3">{svc.desc}</p>
+                  <p className="text-sm text-muted-foreground mb-3">{svc.desc}</p>
 
-                {svc.rated ? (
-                  <div className="flex items-center gap-3">
-                    <StarRating rating={svc.rating} interactive={false} />
-                    {svc.review && <p className="text-sm text-muted-foreground italic">"{svc.review}"</p>}
-                  </div>
-                ) : ratingServiceId === svc.id ? (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3 pt-2 border-t border-border">
-                    <div>
-                      <Label className="mb-2 block text-sm">Sua nota</Label>
-                      <StarRating rating={tempRating} onRate={setTempRating} />
+                  {svc.rated ? (
+                    <div className="flex items-center gap-3">
+                      <StarRating rating={svc.rating} interactive={false} />
+                      {svc.review && <p className="text-sm text-muted-foreground italic">"{svc.review}"</p>}
                     </div>
-                    <div>
-                      <Label className="mb-2 block text-sm">Comentário (opcional)</Label>
-                      <Textarea placeholder="Como foi a experiência?" value={tempReview} onChange={(e) => setTempReview(e.target.value)} rows={2} className="resize-none" />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="hero" size="sm" onClick={() => submitRating(svc.id)}>Enviar Avaliação</Button>
-                      <Button variant="outline" size="sm" onClick={() => { setRatingServiceId(null); setTempRating(0); setTempReview(""); }}>Cancelar</Button>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <Button variant="outline" size="sm" onClick={() => setRatingServiceId(svc.id)}>
-                    <Star className="w-4 h-4" /> Avaliar Prestador
-                  </Button>
-                )}
-              </motion.div>
-            ))}
+                  ) : ratingServiceId === svc.id ? (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3 pt-2 border-t border-border">
+                      <div>
+                        <Label className="mb-2 block text-sm">Sua nota</Label>
+                        <StarRating rating={tempRating} onRate={setTempRating} />
+                      </div>
+                      <div>
+                        <Label className="mb-2 block text-sm">Comentario (opcional)</Label>
+                        <Textarea placeholder="Como foi a experiencia?" value={tempReview} onChange={(e) => setTempReview(e.target.value)} rows={2} className="resize-none" />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="hero" size="sm" onClick={() => submitRating(svc.id)}>Enviar Avaliacao</Button>
+                        <Button variant="outline" size="sm" onClick={() => { setRatingServiceId(null); setTempRating(0); setTempReview(""); }}>Avaliar depois</Button>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={() => setRatingServiceId(svc.id)}>
+                      <Star className="w-4 h-4" /> Avaliar Prestador
+                    </Button>
+                  )}
+                </motion.div>
+              ))
+            )}
           </div>
         )}
       </div>
