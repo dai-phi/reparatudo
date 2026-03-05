@@ -519,6 +519,18 @@ export async function registerRequestRoutes(app: FastifyInstance) {
       ["completed", now, target.id]
     );
 
+    const clientCoordsResult = await pool.query(
+      "SELECT cep_lat, cep_lng FROM users WHERE id = $1",
+      [target.client_id]
+    );
+    const clientCoords = clientCoordsResult.rows[0];
+    if (clientCoords?.cep_lat != null && clientCoords?.cep_lng != null) {
+      await pool.query(
+        `UPDATE users SET last_service_lat = $1, last_service_lng = $2, last_service_at = $3, updated_at = $3 WHERE id = $4`,
+        [Number(clientCoords.cep_lat), Number(clientCoords.cep_lng), now, request.user.sub]
+      );
+    }
+
     const messageText = "🎉 Servico finalizado! Obrigado por usar o FixJa.";
     const messageId = randomUUID();
 

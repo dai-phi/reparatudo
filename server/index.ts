@@ -1,6 +1,7 @@
 import "dotenv/config";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 import jwt from "@fastify/jwt";
 import websocket from "@fastify/websocket";
 import { initDb } from "./db.js";
@@ -21,6 +22,10 @@ const jwtSecret = process.env.JWT_SECRET || "dev-secret";
 await app.register(cors, {
   origin: true,
   credentials: true,
+});
+
+await app.register(cookie, {
+  secret: jwtSecret,
 });
 
 await app.register(jwt, {
@@ -85,10 +90,19 @@ app.get(
   }
 );
 
-app.decorate("authenticate", async function (request, reply) {
+app.decorate("authenticate", async function (request: any, reply: any) {
+  const token =
+    request.cookies?.token ||
+    (request.headers.authorization?.startsWith("Bearer ")
+      ? request.headers.authorization.slice(7)
+      : null);
+  if (!token) {
+    return reply.code(401).send({ message: "Nao autorizado" });
+  }
   try {
-    await request.jwtVerify();
-  } catch (err) {
+    const decoded = await app.jwt.verify(token);
+    request.user = decoded;
+  } catch {
     return reply.code(401).send({ message: "Nao autorizado" });
   }
 });

@@ -10,11 +10,37 @@ import { ApiError, registerClient, setAuth } from "@/lib/api";
 
 const ClientRegister = () => {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", cep: "", password: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    address: "",
+    complement: "",
+    neighborhood: "",
+    city: "",
+    state: "",
+    cep: "",
+    password: "",
+    passwordConfirm: "",
+  });
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (form.password.length > 0 && form.password.length < 6) {
+      e.password = "Senha deve ter no mínimo 6 caracteres";
+    }
+    if (form.passwordConfirm && form.password !== form.passwordConfirm) {
+      e.passwordConfirm = "As senhas não conferem";
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validate()) return;
     const cepNumeric = form.cep.replace(/\D/g, "");
     setLoading(true);
     try {
@@ -22,9 +48,14 @@ const ClientRegister = () => {
         name: form.name.trim(),
         email: form.email.trim(),
         phone: form.phone.trim(),
-        address: form.address.trim() || undefined,
+        address: form.address.trim(),
+        complement: form.complement.trim() || undefined,
+        neighborhood: form.neighborhood.trim() || undefined,
+        city: form.city.trim() || undefined,
+        state: form.state.trim() || undefined,
         cep: cepNumeric,
         password: form.password,
+        passwordConfirm: form.passwordConfirm,
       });
       setAuth(auth);
       toast.success("Cadastro realizado!");
@@ -39,7 +70,6 @@ const ClientRegister = () => {
 
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Left panel */}
       <div className="hidden lg:flex w-1/2 bg-gradient-hero relative items-center justify-center p-12">
         <div className="max-w-md">
           <div className="flex items-center gap-2 mb-8">
@@ -65,7 +95,6 @@ const ClientRegister = () => {
         </div>
       </div>
 
-      {/* Right panel */}
       <div className="flex-1 flex items-center justify-center p-6">
         <motion.div
           className="w-full max-w-md"
@@ -93,8 +122,26 @@ const ClientRegister = () => {
               <Input id="phone" placeholder="(11) 99999-9999" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
             </div>
             <div>
-              <Label htmlFor="address">Endereço</Label>
-              <Input id="address" placeholder="Rua, número, bairro" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+              <Label htmlFor="address">Endereço completo *</Label>
+              <Input id="address" placeholder="Rua, número" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} required />
+            </div>
+            <div>
+              <Label htmlFor="complement">Complemento</Label>
+              <Input id="complement" placeholder="Apto, bloco..." value={form.complement} onChange={(e) => setForm({ ...form, complement: e.target.value })} />
+            </div>
+            <div>
+              <Label htmlFor="neighborhood">Bairro</Label>
+              <Input id="neighborhood" placeholder="Bairro" value={form.neighborhood} onChange={(e) => setForm({ ...form, neighborhood: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="city">Cidade</Label>
+                <Input id="city" placeholder="Cidade" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+              </div>
+              <div>
+                <Label htmlFor="state">Estado</Label>
+                <Input id="state" placeholder="UF" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} maxLength={2} />
+              </div>
             </div>
             <div>
               <Label htmlFor="cep">CEP</Label>
@@ -102,7 +149,27 @@ const ClientRegister = () => {
             </div>
             <div>
               <Label htmlFor="password">Senha</Label>
-              <Input id="password" type="password" placeholder="Crie uma senha" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+              <Input
+                id="password"
+                type="password"
+                placeholder="Mínimo 6 caracteres"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                required
+              />
+              {errors.password && <p className="text-xs text-destructive mt-1">{errors.password}</p>}
+            </div>
+            <div>
+              <Label htmlFor="passwordConfirm">Confirmar senha</Label>
+              <Input
+                id="passwordConfirm"
+                type="password"
+                placeholder="Repita a senha"
+                value={form.passwordConfirm}
+                onChange={(e) => setForm({ ...form, passwordConfirm: e.target.value })}
+                required
+              />
+              {errors.passwordConfirm && <p className="text-xs text-destructive mt-1">{errors.passwordConfirm}</p>}
             </div>
             <Button variant="hero" size="lg" className="w-full" type="submit" disabled={loading}>
               Criar Conta

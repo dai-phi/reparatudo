@@ -4,33 +4,53 @@ import { z } from "zod";
 import { pool } from "../db.js";
 import { hashSecret, sanitizeUser, verifySecret } from "../auth.js";
 import { SERVICE_IDS } from "../services.js";
-import { getCepCoords, normalizeCep } from "../geo.js";
+import { getAddressCoords, getCepCoords, normalizeCep } from "../geo.js";
 
 const emailSchema = z.string().email();
 const phoneSchema = z.string().min(8);
 
-const passwordSchema = z.string().min(6);
+const passwordSchema = z.string().min(6, "Senha deve ter no minimo 6 caracteres");
 
-const clientSchema = z.object({
-  name: z.string().min(2),
-  email: emailSchema,
-  phone: phoneSchema,
-  address: z.string().optional().nullable(),
-  cep: z.string().min(8),
-  password: passwordSchema,
-});
+const clientSchema = z
+  .object({
+    name: z.string().min(2),
+    email: emailSchema,
+    phone: phoneSchema,
+    address: z.string().min(3, "Endereco obrigatorio"),
+    complement: z.string().optional().nullable(),
+    neighborhood: z.string().optional().nullable(),
+    city: z.string().optional().nullable(),
+    state: z.string().optional().nullable(),
+    cep: z.string().min(8),
+    password: passwordSchema,
+    passwordConfirm: z.string(),
+  })
+  .refine((data) => data.password === data.passwordConfirm, {
+    message: "Senhas nao conferem",
+    path: ["passwordConfirm"],
+  });
 
-const providerSchema = z.object({
-  name: z.string().min(2),
-  email: emailSchema,
-  phone: phoneSchema,
-  cpf: z.string().min(11).optional().nullable(),
-  radiusKm: z.coerce.number().min(1).max(50),
-  services: z.array(z.enum(SERVICE_IDS)).min(1),
-  workCep: z.string().min(8),
-  photoUrl: z.string().url().optional().nullable(),
-  password: passwordSchema,
-});
+const providerSchema = z
+  .object({
+    name: z.string().min(2),
+    email: emailSchema,
+    phone: phoneSchema,
+    cpf: z.string().min(11).optional().nullable(),
+    radiusKm: z.coerce.number().min(1).max(50),
+    services: z.array(z.enum(SERVICE_IDS)).min(1),
+    workAddress: z.string().min(3, "Endereco do local de trabalho obrigatorio"),
+    workComplement: z.string().optional().nullable(),
+    workNeighborhood: z.string().optional().nullable(),
+    workCity: z.string().optional().nullable(),
+    workState: z.string().optional().nullable(),
+    workCep: z.string().min(8),
+    password: passwordSchema,
+    passwordConfirm: z.string(),
+  })
+  .refine((data) => data.password === data.passwordConfirm, {
+    message: "Senhas nao conferem",
+    path: ["passwordConfirm"],
+  });
 
 const loginSchema = z.object({
   email: emailSchema,
@@ -46,6 +66,18 @@ function handleValidation<T>(result: z.SafeParseReturnType<T, T>, reply: Fastify
     return null;
   }
   return result.data;
+}
+
+const COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 dias em segundos
+
+function setAuthCookie(reply: FastifyReply, token: string) {
+  reply.setCookie("token", token, {
+    httpOnly: true,
+    path: "/",
+    sameSite: "lax",
+    maxAge: COOKIE_MAX_AGE,
+    secure: process.env.NODE_ENV === "production",
+  });
 }
 
 async function createToken(request: FastifyRequest, userId: string, role: string) {
@@ -67,9 +99,21 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
     const now = new Date().toISOString();
     const cep = normalizeCep(parsed.cep);
-    const coords = await getCepCoords(cep);
+    const addressParts = [
+      parsed.address.trim(),
+      parsed.complement?.trim(),
+      parsed.neighborhood?.trim(),
+      parsed.city?.trim(),
+      parsed.state?.trim(),
+      cep,
+    ].filter(Boolean);
+    const fullAddress = addressParts.join(", ");
+    let coords = await getAddressCoords(fullAddress);
     if (!coords) {
-      return reply.code(400).send({ message: "CEP invalido" });
+      coords = await getCepCoords(cep);
+    }
+    if (!coords) {
+      return reply.code(400).send({ message: "Endereco ou CEP invalido. Verifique os dados." });
     }
     const userId = randomUUID();
     const passwordHash = await hashSecret(parsed.password);
@@ -86,7 +130,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         cep,
         coords.lat,
         coords.lng,
-        parsed.address?.trim() || null,
+        fullAddress,
         passwordHash,
         now,
         now,
@@ -102,13 +146,14 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       cep,
       cepLat: coords.lat,
       cepLng: coords.lng,
-      address: parsed.address?.trim() || undefined,
+      address: fullAddress,
       passwordHash,
       createdAt: now,
       updatedAt: now,
     };
 
     const token = await createToken(request, user.id, user.role);
+    setAuthCookie(reply, token);
     return reply.send({ token, user: sanitizeUser(user) });
   });
 
@@ -126,15 +171,27 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
     const now = new Date().toISOString();
     const workCep = normalizeCep(parsed.workCep);
-    const coords = await getCepCoords(workCep);
+    const workAddressParts = [
+      parsed.workAddress.trim(),
+      parsed.workComplement?.trim(),
+      parsed.workNeighborhood?.trim(),
+      parsed.workCity?.trim(),
+      parsed.workState?.trim(),
+      workCep,
+    ].filter(Boolean);
+    const workAddressFull = workAddressParts.join(", ");
+    let coords = await getAddressCoords(workAddressFull);
     if (!coords) {
-      return reply.code(400).send({ message: "CEP invalido" });
+      coords = await getCepCoords(workCep);
+    }
+    if (!coords) {
+      return reply.code(400).send({ message: "Endereco ou CEP do local de trabalho invalido. Verifique os dados." });
     }
     const userId = randomUUID();
     const passwordHash = await hashSecret(parsed.password);
 
     await pool.query(
-      `INSERT INTO users (id, role, name, email, phone, cpf, radius_km, services, work_cep, work_lat, work_lng, photo_url, password_hash, created_at, updated_at)
+      `INSERT INTO users (id, role, name, email, phone, cpf, radius_km, services, work_cep, work_lat, work_lng, work_address, password_hash, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
       [
         userId,
@@ -148,7 +205,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         workCep,
         coords.lat,
         coords.lng,
-        parsed.photoUrl?.trim() || null,
+        workAddressFull,
         passwordHash,
         now,
         now,
@@ -167,13 +224,14 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       workCep,
       workLat: coords.lat,
       workLng: coords.lng,
-      photoUrl: parsed.photoUrl?.trim() || undefined,
+      workAddress: workAddressFull,
       passwordHash,
       createdAt: now,
       updatedAt: now,
     };
 
     const token = await createToken(request, user.id, user.role);
+    setAuthCookie(reply, token);
     return reply.send({ token, user: sanitizeUser(user) });
   });
 
@@ -197,6 +255,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     }
 
     const token = await createToken(request, user.id, user.role);
+    setAuthCookie(reply, token);
     return reply.send({
       token,
       user: sanitizeUser({
@@ -213,6 +272,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         cepLat: user.cep_lat ?? undefined,
         cepLng: user.cep_lng ?? undefined,
         workCep: user.work_cep ?? undefined,
+        workAddress: user.work_address ?? undefined,
         workLat: user.work_lat ?? undefined,
         workLng: user.work_lng ?? undefined,
         photoUrl: user.photo_url ?? undefined,
@@ -221,5 +281,10 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         updatedAt: user.updated_at,
       }),
     });
+  });
+
+  app.post("/auth/logout", async (_request, reply) => {
+    reply.clearCookie("token", { path: "/" });
+    return reply.code(204).send();
   });
 }

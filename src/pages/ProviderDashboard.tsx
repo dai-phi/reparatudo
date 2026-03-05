@@ -10,7 +10,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ApiError, RequestSummary, acceptRequest, clearAuth, getProviderRequests, getProviderStats, rejectRequest, setStoredUser, updateMe } from "@/lib/api";
+import { ApiError, RequestSummary, acceptRequest, getProviderRequests, getProviderStats, logout, rejectRequest, setStoredUser, updateMe } from "@/lib/api";
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 
@@ -21,7 +21,7 @@ const ProviderDashboard = () => {
   const queryClient = useQueryClient();
   const [hasNewRequest, setHasNewRequest] = useState(false);
   const [activeTab, setActiveTab] = useState<"requests" | "profile">("requests");
-  const [profileForm, setProfileForm] = useState({ name: "", phone: "", radiusKm: "", workCep: "", photoUrl: "" });
+  const [profileForm, setProfileForm] = useState({ name: "", phone: "", radiusKm: "", workCep: "", workAddress: "", photoUrl: "" });
 
   useEffect(() => {
     if (me && me.role !== "provider") {
@@ -36,6 +36,7 @@ const ProviderDashboard = () => {
         phone: me.phone ?? "",
         radiusKm: me.radiusKm ? String(me.radiusKm) : "10",
         workCep: me.workCep ?? "",
+        workAddress: me.workAddress ?? "",
         photoUrl: me.photoUrl ?? "",
       });
     }
@@ -118,18 +119,18 @@ const ProviderDashboard = () => {
     rejectMutation.mutate(id);
   };
 
-  const handleLogout = () => {
-    clearAuth();
-    navigate("/");
+  const handleLogout = async () => {
+    await logout();
+    navigate("/", { replace: true });
   };
 
   const handleSaveProfile = () => {
-    const workCepNumeric = profileForm.workCep.replace(/\D/g, "");
     updateMutation.mutate({
       name: profileForm.name.trim() || undefined,
       phone: profileForm.phone.trim() || undefined,
       radiusKm: profileForm.radiusKm ? Number(profileForm.radiusKm) : undefined,
-      workCep: workCepNumeric || undefined,
+      workCep: profileForm.workCep.replace(/\D/g, "") || undefined,
+      workAddress: profileForm.workAddress.trim() || undefined,
       photoUrl: profileForm.photoUrl.trim() || undefined,
     });
   };
@@ -292,9 +293,13 @@ const ProviderDashboard = () => {
             <h2 className="font-display text-lg font-bold text-foreground">Editar Perfil</h2>
             <div className="p-6 rounded-xl bg-card shadow-card space-y-4">
               <div className="flex items-center gap-4 mb-4">
-                <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center">
-                  <User className="w-8 h-8 text-accent" />
-                </div>
+                {profileForm.photoUrl ? (
+                  <img src={profileForm.photoUrl} alt="Foto" className="w-16 h-16 rounded-full object-cover" />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center">
+                    <User className="w-8 h-8 text-accent" />
+                  </div>
+                )}
                 <div>
                   <p className="font-bold text-card-foreground">{me?.name ?? "Profissional"}</p>
                   <p className="text-sm text-muted-foreground">{me?.email ?? "email@exemplo.com"}</p>
@@ -325,8 +330,17 @@ const ProviderDashboard = () => {
                 />
               </div>
               <div>
+                <Label>Endereço do local de trabalho</Label>
+                <Input
+                  placeholder="Rua, número, bairro, cidade, UF"
+                  value={profileForm.workAddress}
+                  onChange={(e) => setProfileForm((prev) => ({ ...prev, workAddress: e.target.value }))}
+                />
+              </div>
+              <div>
                 <Label>CEP do local de trabalho</Label>
                 <Input
+                  placeholder="00000-000"
                   value={profileForm.workCep}
                   onChange={(e) => setProfileForm((prev) => ({ ...prev, workCep: e.target.value }))}
                 />
@@ -334,9 +348,11 @@ const ProviderDashboard = () => {
               <div>
                 <Label>Foto (URL)</Label>
                 <Input
+                  placeholder="https://..."
                   value={profileForm.photoUrl}
                   onChange={(e) => setProfileForm((prev) => ({ ...prev, photoUrl: e.target.value }))}
                 />
+                <p className="text-xs text-muted-foreground mt-1">Cole o link de uma imagem para sua foto de perfil</p>
               </div>
               <Button variant="hero" className="w-full" onClick={handleSaveProfile} disabled={updateMutation.isPending}>
                 Salvar Alteracoes

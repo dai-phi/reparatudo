@@ -10,7 +10,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ApiError, clearAuth, createRating, createServiceRequest, getClientHistory, getProviders, getRequest } from "@/lib/api";
+import { ApiError, createRating, createServiceRequest, getClientHistory, getProviders, getRequest, logout } from "@/lib/api";
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 
@@ -168,9 +168,9 @@ const ClientHome = () => {
     }
   }, [pendingRequestId, pendingRequestQuery.data, navigate]);
 
-  const handleLogout = () => {
-    clearAuth();
-    navigate("/");
+  const handleLogout = async () => {
+    await logout();
+    navigate("/", { replace: true });
   };
 
   const handleRequest = (providerId: string) => {
@@ -306,6 +306,11 @@ const ClientHome = () => {
                               {provider.rating.toFixed(1)} • Tempo medio: {avgLabel}
                             </div>
                             <p className="text-xs text-muted-foreground">Distancia: {provider.distanceKm ?? "--"} km</p>
+                            {provider.lastServiceDistanceKm != null && (
+                              <p className="text-xs text-muted-foreground">
+                                Ultimo atendimento a {provider.lastServiceDistanceKm} km de voce
+                              </p>
+                            )}
                           </div>
                           <Button
                             variant="hero"

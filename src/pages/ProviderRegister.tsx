@@ -20,8 +20,23 @@ const ProviderRegister = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", cpf: "", radius: "10", password: "", workCep: "", photoUrl: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    cpf: "",
+    radius: "10",
+    workAddress: "",
+    workComplement: "",
+    workNeighborhood: "",
+    workCity: "",
+    workState: "",
+    workCep: "",
+    password: "",
+    passwordConfirm: "",
+  });
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const toggleService = (id: string) => {
     setSelectedServices((prev) =>
@@ -29,7 +44,20 @@ const ProviderRegister = () => {
     );
   };
 
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (form.password.length > 0 && form.password.length < 6) {
+      e.password = "Senha deve ter no mínimo 6 caracteres";
+    }
+    if (form.passwordConfirm && form.password !== form.passwordConfirm) {
+      e.passwordConfirm = "As senhas não conferem";
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
   const handleSubmit = async () => {
+    if (!validate()) return;
     const workCepNumeric = form.workCep.replace(/\D/g, "");
     setLoading(true);
     try {
@@ -40,9 +68,14 @@ const ProviderRegister = () => {
         cpf: form.cpf.trim() || undefined,
         radiusKm: Number(form.radius) || 10,
         services: selectedServices,
+        workAddress: form.workAddress.trim(),
+        workComplement: form.workComplement.trim() || undefined,
+        workNeighborhood: form.workNeighborhood.trim() || undefined,
+        workCity: form.workCity.trim() || undefined,
+        workState: form.workState.trim() || undefined,
         workCep: workCepNumeric,
-        photoUrl: form.photoUrl.trim() || undefined,
         password: form.password,
+        passwordConfirm: form.passwordConfirm,
       });
       setAuth(auth);
       toast.success("Cadastro realizado com sucesso!");
@@ -57,7 +90,6 @@ const ProviderRegister = () => {
 
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Left panel */}
       <div className="hidden lg:flex w-1/2 bg-gradient-hero relative items-center justify-center p-12">
         <div className="max-w-md">
           <div className="flex items-center gap-2 mb-8">
@@ -83,10 +115,9 @@ const ProviderRegister = () => {
         </div>
       </div>
 
-      {/* Right panel - form */}
-      <div className="flex-1 flex items-center justify-center p-6">
+      <div className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
         <motion.div
-          className="w-full max-w-md"
+          className="w-full max-w-md py-6"
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
         >
@@ -97,10 +128,9 @@ const ProviderRegister = () => {
           <h1 className="font-display text-2xl font-bold text-foreground mb-1">
             {step === 1 ? "Dados Pessoais" : "Serviços Oferecidos"}
           </h1>
-          <p className="text-muted-foreground mb-8">Passo {step} de 2</p>
+          <p className="text-muted-foreground mb-6">Passo {step} de 2</p>
 
-          {/* Progress */}
-          <div className="flex gap-2 mb-8">
+          <div className="flex gap-2 mb-6">
             <div className={`h-1.5 flex-1 rounded-full ${step >= 1 ? "bg-accent" : "bg-muted"}`} />
             <div className={`h-1.5 flex-1 rounded-full ${step >= 2 ? "bg-accent" : "bg-muted"}`} />
           </div>
@@ -123,19 +153,70 @@ const ProviderRegister = () => {
                 <Label htmlFor="cpf">CPF</Label>
                 <Input id="cpf" placeholder="000.000.000-00" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} />
               </div>
-              <div>
-                <Label htmlFor="workCep">CEP do local de trabalho</Label>
-                <Input id="workCep" placeholder="00000-000" value={form.workCep} onChange={(e) => setForm({ ...form, workCep: e.target.value })} required />
+
+              <div className="pt-2 border-t border-border">
+                <p className="text-sm font-medium text-foreground mb-3">Endereço do local de trabalho</p>
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="workAddress">Endereço completo *</Label>
+                    <Input id="workAddress" placeholder="Rua, número" value={form.workAddress} onChange={(e) => setForm({ ...form, workAddress: e.target.value })} required />
+                  </div>
+                  <div>
+                    <Label htmlFor="workComplement">Complemento</Label>
+                    <Input id="workComplement" placeholder="Sala, andar..." value={form.workComplement} onChange={(e) => setForm({ ...form, workComplement: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label htmlFor="workNeighborhood">Bairro</Label>
+                    <Input id="workNeighborhood" placeholder="Bairro" value={form.workNeighborhood} onChange={(e) => setForm({ ...form, workNeighborhood: e.target.value })} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="workCity">Cidade</Label>
+                      <Input id="workCity" placeholder="Cidade" value={form.workCity} onChange={(e) => setForm({ ...form, workCity: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label htmlFor="workState">Estado</Label>
+                      <Input id="workState" placeholder="UF" value={form.workState} onChange={(e) => setForm({ ...form, workState: e.target.value })} maxLength={2} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="workCep">CEP</Label>
+                    <Input id="workCep" placeholder="00000-000" value={form.workCep} onChange={(e) => setForm({ ...form, workCep: e.target.value })} required />
+                  </div>
+                </div>
               </div>
-              <div>
-                <Label htmlFor="photoUrl">Foto (URL)</Label>
-                <Input id="photoUrl" placeholder="https://..." value={form.photoUrl} onChange={(e) => setForm({ ...form, photoUrl: e.target.value })} />
-              </div>
+
               <div>
                 <Label htmlFor="password">Senha</Label>
-                <Input id="password" type="password" placeholder="Crie uma senha" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Mínimo 6 caracteres"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  required
+                />
+                {errors.password && <p className="text-xs text-destructive mt-1">{errors.password}</p>}
               </div>
-              <Button className="w-full" size="lg" onClick={() => setStep(2)} disabled={!form.name || !form.email || !form.password || !form.workCep}>
+              <div>
+                <Label htmlFor="passwordConfirm">Confirmar senha</Label>
+                <Input
+                  id="passwordConfirm"
+                  type="password"
+                  placeholder="Repita a senha"
+                  value={form.passwordConfirm}
+                  onChange={(e) => setForm({ ...form, passwordConfirm: e.target.value })}
+                  required
+                />
+                {errors.passwordConfirm && <p className="text-xs text-destructive mt-1">{errors.passwordConfirm}</p>}
+              </div>
+
+              <Button
+                className="w-full"
+                size="lg"
+                onClick={() => setStep(2)}
+                disabled={!form.name || !form.email || !form.password || !form.passwordConfirm || !form.workAddress || !form.workCep || form.password !== form.passwordConfirm}
+              >
                 Continuar
               </Button>
             </div>
@@ -149,11 +230,10 @@ const ProviderRegister = () => {
                     return (
                       <button
                         key={service.id}
+                        type="button"
                         onClick={() => toggleService(service.id)}
                         className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
-                          selected
-                            ? "border-accent bg-accent/10"
-                            : "border-border hover:border-accent/50"
+                          selected ? "border-accent bg-accent/10" : "border-border hover:border-accent/50"
                         }`}
                       >
                         <service.icon className={`w-5 h-5 ${selected ? "text-accent" : "text-muted-foreground"}`} />

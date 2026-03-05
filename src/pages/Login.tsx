@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,11 +7,18 @@ import { ArrowLeft, CheckCircle2, Wrench } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { ApiError, login, setAuth } from "@/lib/api";
+import { useAuthUser } from "@/hooks/useAuth";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { data: user, isLoading } = useAuthUser();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
+
+  useEffect(() => {
+    if (isLoading || !user) return;
+    navigate(user.role === "provider" ? "/provider/dashboard" : "/client/home", { replace: true });
+  }, [user, isLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

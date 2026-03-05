@@ -1,20 +1,21 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { clearAuth, getMe, getStoredUser, getToken, setStoredUser } from "@/lib/api";
+import { clearAuth, getMe, getStoredUser, setStoredUser } from "@/lib/api";
 
 export function useRequireAuth(redirectTo: string) {
   const navigate = useNavigate();
-  const token = getToken();
+  const { data: user, isLoading } = useAuthUser();
+
   useEffect(() => {
-    if (!token) {
-      navigate(redirectTo);
+    if (isLoading) return;
+    if (!user) {
+      navigate(redirectTo, { replace: true });
     }
-  }, [navigate, redirectTo, token]);
+  }, [user, isLoading, navigate, redirectTo]);
 }
 
 export function useAuthUser() {
-  const token = getToken();
   const query = useQuery({
     queryKey: ["me"],
     queryFn: async () => {
@@ -22,9 +23,10 @@ export function useAuthUser() {
       setStoredUser(me);
       return me;
     },
-    enabled: Boolean(token),
+    enabled: true,
     initialData: getStoredUser() ?? undefined,
     retry: false,
+    staleTime: 60 * 1000,
   });
 
   useEffect(() => {

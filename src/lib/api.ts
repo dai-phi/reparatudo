@@ -8,6 +8,7 @@ export interface User {
   phone: string;
   cep?: string;
   workCep?: string;
+  workAddress?: string;
   photoUrl?: string | null;
   address?: string;
   cpf?: string;
@@ -80,6 +81,8 @@ export interface ProviderCard {
   rating: number;
   avgResponseMins: number;
   distanceKm: number | null;
+  lastServiceDistanceKm: number | null;
+  lastServiceAt: string | null;
   radiusKm: number;
 }
 
@@ -125,6 +128,14 @@ export function clearAuth() {
   localStorage.removeItem(USER_KEY);
 }
 
+export async function logout() {
+  try {
+    await fetch(`${API_URL}/auth/logout`, { method: "POST", credentials: "include" });
+  } finally {
+    clearAuth();
+  }
+}
+
 export const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:3333").replace(/\/$/, "");
 
 async function apiFetch<T>(path: string, options?: { method?: string; body?: unknown; auth?: boolean }) {
@@ -139,15 +150,15 @@ async function apiFetch<T>(path: string, options?: { method?: string; body?: unk
 
   if (options?.auth) {
     const token = getToken();
-    if (!token) {
-      throw new ApiError("Sessão expirada. Faça login novamente.", 401);
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
-    headers.Authorization = `Bearer ${token}`;
   }
 
   const response = await fetch(`${API_URL}${path}`, {
     method,
     headers,
+    credentials: "include",
     body: options?.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 
@@ -172,14 +183,41 @@ async function apiFetch<T>(path: string, options?: { method?: string; body?: unk
   return (await response.json()) as T;
 }
 
-export function registerClient(payload: { name: string; email: string; phone: string; address?: string; password: string; cep: string }) {
+export function registerClient(payload: {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  cep: string;
+  password: string;
+  passwordConfirm: string;
+}) {
   return apiFetch<AuthResponse>("/auth/register/client", {
     method: "POST",
     body: payload,
   });
 }
 
-export function registerProvider(payload: { name: string; email: string; phone: string; cpf?: string; radiusKm: number; services: string[]; password: string; workCep: string; photoUrl?: string }) {
+export function registerProvider(payload: {
+  name: string;
+  email: string;
+  phone: string;
+  cpf?: string;
+  radiusKm: number;
+  services: string[];
+  workAddress: string;
+  workComplement?: string;
+  workNeighborhood?: string;
+  workCity?: string;
+  workState?: string;
+  workCep: string;
+  password: string;
+  passwordConfirm: string;
+}) {
   return apiFetch<AuthResponse>("/auth/register/provider", {
     method: "POST",
     body: payload,
@@ -197,7 +235,24 @@ export function getMe() {
   return apiFetch<User>("/me", { auth: true });
 }
 
-export function updateMe(payload: { name?: string; phone?: string; address?: string; radiusKm?: number; cep?: string; workCep?: string; photoUrl?: string }) {
+export function updateMe(payload: {
+  name?: string;
+  phone?: string;
+  address?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  radiusKm?: number;
+  cep?: string;
+  workAddress?: string;
+  workComplement?: string;
+  workNeighborhood?: string;
+  workCity?: string;
+  workState?: string;
+  workCep?: string;
+  photoUrl?: string;
+}) {
   return apiFetch<User>("/me", { method: "PATCH", auth: true, body: payload });
 }
 

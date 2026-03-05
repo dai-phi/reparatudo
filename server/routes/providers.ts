@@ -31,6 +31,7 @@ export async function registerProviderSearchRoutes(app: FastifyInstance) {
 
     const providerResult = await pool.query(
       `SELECT u.id, u.name, u.photo_url, u.radius_km, u.work_lat, u.work_lng,
+              u.last_service_lat, u.last_service_lng, u.last_service_at,
               COALESCE(AVG(r.rating), 0) as rating_avg,
               COALESCE(AVG(EXTRACT(EPOCH FROM (req.accepted_at - req.created_at)) / 60), 9999) as avg_response
        FROM users u
@@ -49,6 +50,10 @@ export async function registerProviderSearchRoutes(app: FastifyInstance) {
         const distance = row.work_lat && row.work_lng
           ? distanceKm(clientCoords, { lat: Number(row.work_lat), lng: Number(row.work_lng) })
           : null;
+        const lastServiceKm =
+          row.last_service_lat != null && row.last_service_lng != null
+            ? distanceKm(clientCoords, { lat: Number(row.last_service_lat), lng: Number(row.last_service_lng) })
+            : null;
         return {
           id: row.id,
           name: row.name,
@@ -56,6 +61,8 @@ export async function registerProviderSearchRoutes(app: FastifyInstance) {
           rating: Number(row.rating_avg || 0),
           avgResponseMins: Math.round(Number(row.avg_response || 0)),
           distanceKm: distance !== null ? Number(distance.toFixed(1)) : null,
+          lastServiceDistanceKm: lastServiceKm !== null ? Number(lastServiceKm.toFixed(1)) : null,
+          lastServiceAt: row.last_service_at || null,
           radiusKm: row.radius_km ? Number(row.radius_km) : 0,
         };
       })

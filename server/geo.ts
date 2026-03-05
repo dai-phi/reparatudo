@@ -71,3 +71,16 @@ export async function getCepCoords(rawCep: string) {
 
   return coords;
 }
+
+export async function getAddressCoords(addressString: string): Promise<{ lat: number; lng: number } | null> {
+  const query = encodeURIComponent(`${addressString.trim()}, Brazil`);
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`;
+  const response = await fetch(url, {
+    headers: { "User-Agent": "fixja-app/1.0" },
+  });
+  if (!response.ok) return null;
+  const data = await response.json();
+  const item = data?.[0];
+  if (!item?.lat || !item?.lon) return null;
+  return { lat: Number(item.lat), lng: Number(item.lon) };
+}

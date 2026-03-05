@@ -2,12 +2,16 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../db.js";
 import { sanitizeUser } from "../auth.js";
-import { getCepCoords, normalizeCep } from "../geo.js";
+import { getAddressCoords, getCepCoords, normalizeCep } from "../geo.js";
 
 const updateClientSchema = z.object({
   name: z.string().min(2).optional(),
   phone: z.string().min(8).optional(),
   address: z.string().optional().nullable(),
+  complement: z.string().optional().nullable(),
+  neighborhood: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
   cep: z.string().min(8).optional(),
 });
 
@@ -15,6 +19,11 @@ const updateProviderSchema = z.object({
   name: z.string().min(2).optional(),
   phone: z.string().min(8).optional(),
   radiusKm: z.coerce.number().min(1).max(50).optional(),
+  workAddress: z.string().optional().nullable(),
+  workComplement: z.string().optional().nullable(),
+  workNeighborhood: z.string().optional().nullable(),
+  workCity: z.string().optional().nullable(),
+  workState: z.string().optional().nullable(),
   workCep: z.string().min(8).optional(),
   photoUrl: z.string().url().optional().nullable(),
 });
@@ -43,6 +52,7 @@ export async function registerMeRoutes(app: FastifyInstance) {
         cepLat: user.cep_lat ?? undefined,
         cepLng: user.cep_lng ?? undefined,
         workCep: user.work_cep ?? undefined,
+        workAddress: user.work_address ?? undefined,
         workLat: user.work_lat ?? undefined,
         workLng: user.work_lng ?? undefined,
         photoUrl: user.photo_url ?? undefined,
@@ -86,9 +96,22 @@ export async function registerMeRoutes(app: FastifyInstance) {
     }
     if (parsed.data.cep !== undefined) {
       const cep = normalizeCep(parsed.data.cep);
-      const coords = await getCepCoords(cep);
-      if (!coords) {
+      if (cep.length !== 8) {
         return reply.code(400).send({ message: "CEP invalido" });
+      }
+      const addressParts = [
+        parsed.data.address ?? user.address,
+        parsed.data.complement,
+        parsed.data.neighborhood,
+        parsed.data.city,
+        parsed.data.state,
+        cep,
+      ].filter(Boolean);
+      const fullAddress = addressParts.join(", ");
+      let coords = fullAddress.length > 5 ? await getAddressCoords(fullAddress) : null;
+      if (!coords) coords = await getCepCoords(cep);
+      if (!coords) {
+        return reply.code(400).send({ message: "Endereco ou CEP invalido" });
       }
       updates.push(`cep = $${idx++}`);
       values.push(cep);
@@ -96,16 +119,31 @@ export async function registerMeRoutes(app: FastifyInstance) {
       values.push(coords.lat);
       updates.push(`cep_lng = $${idx++}`);
       values.push(coords.lng);
+      updates.push(`address = $${idx++}`);
+      values.push(fullAddress);
     }
     if (parsed.data.radiusKm !== undefined) {
       updates.push(`radius_km = $${idx++}`);
       values.push(parsed.data.radiusKm);
     }
-    if (parsed.data.workCep !== undefined) {
-      const workCep = normalizeCep(parsed.data.workCep);
-      const coords = await getCepCoords(workCep);
+    if (user.role === "provider" && (parsed.data.workCep !== undefined || parsed.data.workAddress !== undefined)) {
+      const workCep = parsed.data.workCep ? normalizeCep(parsed.data.workCep) : (user.work_cep ?? "");
+      const workParts = [
+        parsed.data.workAddress ?? user.work_address,
+        parsed.data.workComplement,
+        parsed.data.workNeighborhood,
+        parsed.data.workCity,
+        parsed.data.workState,
+        workCep,
+      ].filter(Boolean);
+      const workAddressFull = workParts.join(", ");
+      if (workCep.length !== 8) {
+        return reply.code(400).send({ message: "CEP do local de trabalho invalido" });
+      }
+      let coords = workAddressFull.length > 5 ? await getAddressCoords(workAddressFull) : null;
+      if (!coords) coords = await getCepCoords(workCep);
       if (!coords) {
-        return reply.code(400).send({ message: "CEP invalido" });
+        return reply.code(400).send({ message: "Endereco ou CEP do local de trabalho invalido" });
       }
       updates.push(`work_cep = $${idx++}`);
       values.push(workCep);
@@ -113,6 +151,8 @@ export async function registerMeRoutes(app: FastifyInstance) {
       values.push(coords.lat);
       updates.push(`work_lng = $${idx++}`);
       values.push(coords.lng);
+      updates.push(`work_address = $${idx++}`);
+      values.push(workAddressFull);
     }
     if (parsed.data.photoUrl !== undefined) {
       updates.push(`photo_url = $${idx++}`);
@@ -147,6 +187,7 @@ export async function registerMeRoutes(app: FastifyInstance) {
         cepLat: fresh.cep_lat ?? undefined,
         cepLng: fresh.cep_lng ?? undefined,
         workCep: fresh.work_cep ?? undefined,
+        workAddress: fresh.work_address ?? undefined,
         workLat: fresh.work_lat ?? undefined,
         workLng: fresh.work_lng ?? undefined,
         photoUrl: fresh.photo_url ?? undefined,
