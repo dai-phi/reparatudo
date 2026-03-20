@@ -29,12 +29,16 @@ git clone <YOUR_GIT_URL>
 # Step 2: Navigate to the project directory.
 cd <YOUR_PROJECT_NAME>
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Step 3: Install dependencies (npm workspaces: single lockfile at repo root).
+npm install
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Step 4: Run the Vite dev server (port 8080) and the Fastify API (port 3333) together.
 npm run dev
 ```
+
+Monorepo layout: `apps/web` (Vite + React) and `apps/api` (Fastify). You can also run each app alone: `npm run dev -w apps/web` and `npm run dev -w apps/api`.
+
+The API needs `DATABASE_URL` (and optionally `JWT_SECRET`, `PORT`, `HOST`) — see `apps/api/.env.example`. For a full TypeScript check of the server: `npm run typecheck -w apps/api` (may report errors until the codebase is aligned with `tsc`).
 
 **Edit a file directly in GitHub**
 
@@ -62,15 +66,9 @@ This project is built with:
 
 ## Backend (Fastify)
 
-API local padrao: `http://localhost:3333`
+API local padrao: `http://localhost:3333` (pacote `apps/api`).
 
-Scripts:
-
-```sh
-npm run dev:server
-```
-
-Variaveis de ambiente sugeridas:
+Variaveis de ambiente sugeridas (no diretorio `apps/api` ou na raiz, conforme `dotenv`):
 
 ```sh
 DATABASE_URL=postgresql://usuario:senha@host/banco?sslmode=require
@@ -79,7 +77,7 @@ PORT=3333
 HOST=0.0.0.0
 ```
 
-Para apontar o front-end para outro host, defina `VITE_API_URL` no `.env.local`:
+Para apontar o front-end para outro host, defina `VITE_API_URL` (e opcionalmente `VITE_WS_URL`) em `apps/web/.env.local` — veja `apps/web/.env.example`:
 
 ```sh
 VITE_API_URL=http://localhost:3333
