@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { pool } from "../db.js";
-import { distanceKm } from "../geo.js";
-import { SERVICE_IDS } from "../services.js";
+import { pool } from "../../../infrastructure/persistence/pool.js";
+import { PostgresGeoService } from "../../../infrastructure/geo/postgresGeoService.js";
+import { SERVICE_IDS } from "../../../domain/value-objects/service-id.js";
+
+const geo = new PostgresGeoService();
 
 const querySchema = z.object({
   serviceId: z.enum(SERVICE_IDS),
@@ -19,10 +21,9 @@ export async function registerProviderSearchRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Parametros invalidos", issues: parsed.error.flatten() });
     }
 
-    const clientResult = await pool.query(
-      "SELECT cep, cep_lat, cep_lng FROM users WHERE id = $1",
-      [request.user.sub]
-    );
+    const clientResult = await pool.query("SELECT cep, cep_lat, cep_lng FROM users WHERE id = $1", [
+      request.user.sub,
+    ]);
     const client = clientResult.rows[0];
 
     if (!client?.cep_lat || !client?.cep_lng) {
@@ -47,12 +48,13 @@ export async function registerProviderSearchRoutes(app: FastifyInstance) {
 
     const providers = providerResult.rows
       .map((row) => {
-        const distance = row.work_lat && row.work_lng
-          ? distanceKm(clientCoords, { lat: Number(row.work_lat), lng: Number(row.work_lng) })
-          : null;
+        const distance =
+          row.work_lat && row.work_lng
+            ? geo.distanceKm(clientCoords, { lat: Number(row.work_lat), lng: Number(row.work_lng) })
+            : null;
         const lastServiceKm =
           row.last_service_lat != null && row.last_service_lng != null
-            ? distanceKm(clientCoords, { lat: Number(row.last_service_lat), lng: Number(row.last_service_lng) })
+            ? geo.distanceKm(clientCoords, { lat: Number(row.last_service_lat), lng: Number(row.last_service_lng) })
             : null;
         return {
           id: row.id,

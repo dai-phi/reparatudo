@@ -1,0 +1,109 @@
+import { randomUUID } from "node:crypto";
+import type { IUserRepository } from "../../domain/ports/user-repository.js";
+import type { IPasswordHasher } from "../../domain/ports/password-hasher.js";
+import type { IGeoService } from "../../domain/ports/geo-service.js";
+import type { UserRecord } from "../../domain/entities/records.js";
+import type { ServiceId } from "../../domain/value-objects/service-id.js";
+import type { AuthFailure, AuthSuccess } from "./registerClient.js";
+
+export type RegisterProviderInput = {
+  name: string;
+  email: string;
+  phone: string;
+  cpf?: string | null;
+  radiusKm: number;
+  services: ServiceId[];
+  workAddress: string;
+  workComplement?: string | null;
+  workNeighborhood?: string | null;
+  workCity?: string | null;
+  workState?: string | null;
+  workCep: string;
+  password: string;
+};
+
+export async function registerProvider(
+  deps: {
+    users: IUserRepository;
+    geo: IGeoService;
+    passwordHasher: IPasswordHasher;
+  },
+  input: RegisterProviderInput
+): Promise<AuthSuccess | AuthFailure> {
+  const email = input.email.toLowerCase();
+  const phone = input.phone.trim();
+
+  if (await deps.users.existsByEmailLower(email)) {
+    return { status: 409, message: "E-mail ja cadastrado" };
+  }
+
+  const now = new Date().toISOString();
+  const workCep = deps.geo.normalizeCep(input.workCep);
+  const workAddressParts = [
+    input.workAddress.trim(),
+    input.workComplement?.trim(),
+    input.workNeighborhood?.trim(),
+    input.workCity?.trim(),
+    input.workState?.trim(),
+    workCep,
+  ].filter(Boolean);
+  const workAddressFull = workAddressParts.join(", ");
+  let coords = await deps.geo.getAddressCoords(workAddressFull);
+  if (!coords) {
+    coords = await deps.geo.getCepCoords(workCep);
+  }
+  if (!coords) {
+    return {
+      status: 400,
+      message: "Endereco ou CEP do local de trabalho invalido. Verifique os dados.",
+    };
+  }
+
+  const userId = randomUUID();
+  const passwordHash = await deps.passwordHasher.hash(input.password);
+
+  await deps.users.insertProvider({
+    id: userId,
+    name: input.name.trim(),
+    email,
+    phone,
+    cpf: input.cpf?.trim() || null,
+    radiusKm: input.radiusKm,
+    services: input.services,
+    workCep,
+    workLat: coords.lat,
+    workLng: coords.lng,
+    workAddress: workAddressFull,
+    passwordHash,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const user: UserRecord = {
+    id: userId,
+    role: "provider",
+    name: input.name.trim(),
+    email,
+    phone,
+    cep: null,
+    cepLat: null,
+    cepLng: null,
+    workCep,
+    workLat: coords.lat,
+    workLng: coords.lng,
+    workAddress: workAddressFull,
+    photoUrl: null,
+    address: null,
+    cpf: input.cpf?.trim() || null,
+    radiusKm: input.radiusKm,
+    services: input.services,
+    passwordHash,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  return {
+    user,
+    tokenPayload: { sub: user.id, role: "provider" },
+  };
+}

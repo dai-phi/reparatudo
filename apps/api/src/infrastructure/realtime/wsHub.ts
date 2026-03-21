@@ -1,13 +1,13 @@
 import WebSocket from "ws";
-import type { Role } from "./db.js";
+import type { Role } from "../../domain/entities/role.js";
 
-type EventPayload = {
+export type EventPayload = {
   type: string;
   requestId?: string;
   payload?: unknown;
 };
 
-interface ConnectionMeta {
+export interface ConnectionMeta {
   socket: WebSocket;
   userId: string;
   role: Role;

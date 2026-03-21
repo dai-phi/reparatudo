@@ -9,5 +9,5 @@
     "noEmit": true,
     "strict": false
   },
-  "include": ["./**/*.ts", "./fastify.d.ts"]
+  "include": ["./src/**/*.ts", "./src/**/*.d.ts"]
 }

@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { pool } from "../db.js";
-import { SERVICE_LABELS } from "../services.js";
-import { formatCurrency, formatDate } from "../utils.js";
+import { pool } from "../../../infrastructure/persistence/pool.js";
+import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
+import { formatCurrency, formatDate } from "../../utils/format.js";
 
 const ratingSchema = z.object({
   requestId: z.string().min(1),

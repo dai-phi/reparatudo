@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { pool } from "../db.js";
-import { SERVICE_LABELS } from "../services.js";
-import { formatCurrency, formatRelativeTime } from "../utils.js";
+import { pool } from "../../../infrastructure/persistence/pool.js";
+import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
+import { formatCurrency, formatRelativeTime } from "../../utils/format.js";
 
 export async function registerProviderRoutes(app: FastifyInstance) {
   app.get("/provider/requests", { preHandler: [app.authenticate] }, async (request, reply) => {
