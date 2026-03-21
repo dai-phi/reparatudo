@@ -1,16 +1,16 @@
 import type { Pool } from "pg";
-import type { Role } from "../../domain/entities/role.js";
-import type { RequestRecord } from "../../domain/entities/records.js";
-import type { ServiceId } from "../../domain/value-objects/service-id.js";
-import { isServiceId } from "../../domain/value-objects/service-id.js";
+import type { Role } from "../../../domain/entities/role.js";
+import type { RequestRecord } from "../../../domain/entities/records.js";
+import type { ServiceId } from "../../../domain/value-objects/service-id.js";
+import { isServiceId } from "../../../domain/value-objects/service-id.js";
 import type {
   IRequestRepository,
   MessageRow,
   RequestParticipants,
   ProviderPreview,
   ClientPreview,
-} from "../../domain/ports/request-repository.js";
-import { pool as defaultPool } from "./pool.js";
+} from "../../../domain/ports/request-repository.js";
+import { pool as defaultPool } from "../pool.js";
 
 function mapRequestRow(row: Record<string, unknown>): RequestRecord {
   const sid = String(row.service_id);

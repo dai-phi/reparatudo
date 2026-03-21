@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
-import { pool as defaultPool } from "./pool.js";
-import { StatusEnum } from "../../domain/value-objects/status-enum.js";
+import { pool as defaultPool } from "../pool.js";
+import { StatusEnum } from "../../../domain/value-objects/status-enum.js";
 
 export class PostgresProviderRepository {
   constructor(private readonly db: Pool = defaultPool) {}

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sanitizeUser } from "../../../application/auth/sanitize-user.js";
 import { PostgresGeoService } from "../../../infrastructure/geo/postgres-geo-service.js";
-import { PostgresProfileRepository } from "../../../infrastructure/persistence/postgres-profile-repository.js";
+import { PostgresProfileRepository } from "../../../infrastructure/persistence/repository/postgres-profile-repository.js";
 
 const geo = new PostgresGeoService();
 

@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { pool as defaultPool } from "./pool.js";
+import { pool as defaultPool } from "../pool.js";
 
 export class PostgresProfileRepository {
   constructor(private readonly db: Pool = defaultPool) {}

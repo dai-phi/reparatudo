@@ -1,9 +1,9 @@
 import type { Pool } from "pg";
-import type { IUserRepository, RegisterClientInput, RegisterProviderInput, ProviderForRequest } from "../../domain/ports/user-repository.js";
-import type { UserRecord } from "../../domain/entities/records.js";
-import type { ServiceId } from "../../domain/value-objects/service-id.js";
-import { isServiceId } from "../../domain/value-objects/service-id.js";
-import { pool as defaultPool } from "./pool.js";
+import type { IUserRepository, RegisterClientInput, RegisterProviderInput, ProviderForRequest } from "../../../domain/ports/user-repository.js";
+import type { UserRecord } from "../../../domain/entities/records.js";
+import type { ServiceId } from "../../../domain/value-objects/service-id.js";
+import { isServiceId } from "../../../domain/value-objects/service-id.js";
+import { pool as defaultPool } from "../pool.js";
 
 function mapUserRow(row: Record<string, unknown>): UserRecord {
   const services = row.services as string[] | null;

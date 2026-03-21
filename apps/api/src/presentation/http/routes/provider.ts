@@ -4,7 +4,7 @@ import { z } from "zod";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
 import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
-import { PostgresProviderRepository } from "../../../infrastructure/persistence/postgres-provider-repository.js";
+import { PostgresProviderRepository } from "../../../infrastructure/persistence/repository/postgres-provider-repository.js";
 
 const FREE_TRIAL_MONTHS = 2;
 

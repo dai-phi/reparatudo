@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
-import { pool as defaultPool } from "./pool.js";
-import type { ServiceId } from "../../domain/value-objects/service-id.js";
+import { pool as defaultPool } from "../pool.js";
+import type { ServiceId } from "../../../domain/value-objects/service-id.js";
 
 export class PostgresProviderSearchRepository {
   constructor(private readonly db: Pool = defaultPool) {}

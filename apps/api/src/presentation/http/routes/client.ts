@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
-import { PostgresClientRepository } from "../../../infrastructure/persistence/postgres-client-repository.js";
+import { PostgresClientRepository } from "../../../infrastructure/persistence/repository/postgres-client-repository.js";
 import { StatusEnum } from "../../../domain/value-objects/status-enum.js";
 
 const ratingSchema = z.object({
