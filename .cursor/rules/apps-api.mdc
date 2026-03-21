@@ -1,0 +1,45 @@
+---
+description: API Fastify, camadas e convenções do apps/api
+globs: apps/api/**/*.ts
+alwaysApply: false
+---
+
+# `apps/api` — convenções
+
+## Stack e onde colocar código novo
+
+- **Fastify 5**, **TypeScript ESM** (`"type": "module"`, `moduleResolution: NodeNext`), **Zod** (validação HTTP), **pg**, **@fastify/jwt** + cookie, **@fastify/websocket**, **bcryptjs**.
+- **Rota HTTP** → `presentation/http/routes` + `register*Routes` em `main.ts`.
+- **Caso de uso** → `application/` (ex.: `application/auth/`, `application/websocket/`).
+- **Contrato / domínio** → `domain/` (entidades, value objects, **ports** como `IUserRepository`) — sem Fastify nem SQL.
+- **Postgres e adaptadores** → `infrastructure/` (ex.: `persistence/`, hasher, broadcasters).
+
+## Direção de dependências
+
+- `application` depende de **interfaces** em `domain` (ports), não de `infrastructure` dentro dos use cases.
+- Implementações em `infrastructure` **implementam** as ports; o **wiring** (instanciar adaptadores e injetar) fica em `main.ts`.
+
+## HTTP
+
+- Funções `registerXRoutes(app, deps?)`; validação de entrada com **Zod** na camada de apresentação.
+- Respostas JSON e mensagens de erro da API em **português**, alinhadas ao estilo já usado no código.
+
+## Autenticação
+
+- Fluxo central em `presentation/http/register-authenticate.ts`: cookie `token` ou `Authorization: Bearer`.
+- Rotas protegidas: `preHandler: [app.authenticate]`.
+- Tipos JWT e `authenticate` em `src/fastify.d.ts` — manter coerentes ao alterar claims ou assinatura.
+
+## WebSocket
+
+- Registo em `presentation/websocket/register-web-socket.ts`.
+- Autorização da ligação em `application/websocket/authorize-web-socket-connection.ts`.
+
+## ESM e TypeScript
+
+- Imports relativos com sufixo **`.js`** (exigência NodeNext/ESM).
+- Evitar `any` onde já existem tipos; ao adicionar **ports** em `domain`, atualizar as implementações Postgres correspondentes em `infrastructure`.
+
+## Scripts (`apps/api`)
+
+- `npm`: `dev` (tsx watch), `typecheck` (`tsc -p tsconfig.json`), `lint` (`eslint .`).
