@@ -55,6 +55,17 @@ export interface ClientHistoryItem {
   review: string;
 }
 
+export interface ClientRequestItem {
+  id: string;
+  provider: string;
+  service: string;
+  desc: string;
+  status: string;
+  statusLabel: string;
+  chatOpen: boolean;
+  time: string;
+}
+
 export interface RequestDetails {
   id: string;
   status: string;
@@ -261,6 +272,10 @@ export function updateMe(payload: {
 
 export function getClientHistory() {
   return apiFetch<ClientHistoryItem[]>("/client/history", { auth: true });
+}
+
+export function getClientRequests() {
+  return apiFetch<ClientRequestItem[]>("/client/requests", { auth: true });
 }
 
 export function createRating(payload: { requestId: string; rating: number; review?: string }) {

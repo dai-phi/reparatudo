@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { pool } from "../../../infrastructure/persistence/pool.js";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
-import { formatCurrency, formatDate } from "../../utils/format.js";
+import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
 
 const ratingSchema = z.object({
   requestId: z.string().min(1),
@@ -11,7 +11,57 @@ const ratingSchema = z.object({
   review: z.string().optional().nullable(),
 });
 
+function statusMeta(status: string): { label: string; chatOpen: boolean } {
+  switch (status) {
+    case "open":
+      return { label: "Aguardando prestador", chatOpen: true };
+    case "accepted":
+      return { label: "Em negociacao", chatOpen: true };
+    case "confirmed":
+      return { label: "Servico confirmado", chatOpen: true };
+    case "completed":
+      return { label: "Finalizado", chatOpen: false };
+    case "cancelled":
+      return { label: "Cancelado", chatOpen: false };
+    case "rejected":
+      return { label: "Recusado", chatOpen: false };
+    default:
+      return { label: status, chatOpen: false };
+  }
+}
+
 export async function registerClientRoutes(app: FastifyInstance) {
+  app.get("/client/requests", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "client") {
+      return reply.code(403).send({ message: "Acesso negado" });
+    }
+
+    const result = await pool.query(
+      `SELECT r.id, r.service_id, r.description, r.status, r.created_at, r.updated_at, u.name as provider_name
+       FROM requests r
+       LEFT JOIN users u ON u.id = r.provider_id
+       WHERE r.client_id = $1
+       ORDER BY r.updated_at DESC`,
+      [request.user.sub]
+    );
+
+    const items = result.rows.map((row) => {
+      const meta = statusMeta(String(row.status));
+      return {
+        id: row.id,
+        provider: row.provider_name ?? "Prestador",
+        service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
+        desc: row.description || "Sem descricao",
+        status: String(row.status),
+        statusLabel: meta.label,
+        chatOpen: meta.chatOpen,
+        time: formatRelativeTime(row.updated_at),
+      };
+    });
+
+    return reply.send(items);
+  });
+
   app.get("/client/history", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "client") {
       return reply.code(403).send({ message: "Acesso negado" });

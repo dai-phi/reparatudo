@@ -57,6 +57,10 @@ export async function sendMessage(
     return { error: { status: 404, message: "Pedido nao encontrado" } as const };
   }
 
+  if (["completed", "cancelled", "rejected"].includes(target.status)) {
+    return { error: { status: 400, message: "Conversa encerrada" } as const };
+  }
+
   const now = new Date().toISOString();
   const message = {
     id: randomUUID(),

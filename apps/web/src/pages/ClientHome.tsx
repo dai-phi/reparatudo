@@ -5,14 +5,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Wrench, Zap, Droplets, PaintBucket, Hammer, User, Bell, LogOut,
-  Search, ArrowRight, Loader2, ClipboardList, Star
+  Search, ArrowRight, Loader2, ClipboardList, Star, MessageSquare,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ApiError, createRating, createServiceRequest, getClientHistory, getProviders, getRequest, logout } from "@/lib/api";
+import { ApiError, createRating, createServiceRequest, getClientHistory, getClientRequests, getProviders, getRequest, logout } from "@/lib/api";
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
+import { Badge } from "@/components/ui/badge";
 
 const services = [
   { id: "eletrica", icon: Zap, label: "Elétrica", desc: "Tomadas, fiação, disjuntores", color: "from-yellow-400 to-amber-500" },
@@ -57,7 +58,8 @@ const ClientHome = () => {
   useRequireAuth("/login");
   const { data: me } = useAuthUser();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"request" | "history">("request");
+  const [activeTab, setActiveTab] = useState<"request" | "requested" | "history">("request");
+  const [requestedSegment, setRequestedSegment] = useState<"open" | "historico">("open");
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
@@ -84,14 +86,20 @@ const ClientHome = () => {
     }
   }, [location.state, location.pathname, navigate, queryClient]);
 
-  useEffect(() => {
-  }, [selectedService]);
-
   const historyQuery = useQuery({
     queryKey: ["clientHistory"],
     queryFn: getClientHistory,
     enabled: Boolean(me && me.role === "client"),
   });
+
+  const clientRequestsQuery = useQuery({
+    queryKey: ["clientRequests"],
+    queryFn: getClientRequests,
+    enabled: Boolean(me && me.role === "client"),
+  });
+
+  const openRequests = (clientRequestsQuery.data ?? []).filter((r) => r.chatOpen);
+  const historicRequests = (clientRequestsQuery.data ?? []).filter((r) => !r.chatOpen);
 
   const providersQuery = useQuery({
     queryKey: ["providers", selectedService],
@@ -103,6 +111,7 @@ const ClientHome = () => {
     mutationFn: createServiceRequest,
     onSuccess: (data) => {
       setPendingRequestId(data.requestId);
+      queryClient.invalidateQueries({ queryKey: ["clientRequests"] });
       toast.success("Pedido enviado! Aguardando aceite do prestador.");
     },
     onError: (error: unknown) => {
@@ -139,6 +148,9 @@ const ClientHome = () => {
   const handleRequestWsEvent = useCallback(
     (event: WebsocketEvent) => {
       if (!pendingRequestId || event.requestId !== pendingRequestId) return;
+      if (event.type === "request.updated") {
+        queryClient.invalidateQueries({ queryKey: ["clientRequests"] });
+      }
       if (event.type === "request.updated" && event.payload?.status === "accepted") {
         navigate(`/chat/${pendingRequestId}`);
       }
@@ -147,7 +159,7 @@ const ClientHome = () => {
         setPendingRequestId(null);
       }
     },
-    [pendingRequestId, navigate]
+    [pendingRequestId, navigate, queryClient]
   );
 
   useWebsocket({
@@ -220,27 +232,132 @@ const ClientHome = () => {
 
       <div className="container py-8">
         {/* Tabs */}
-        <div className="flex gap-1 bg-muted rounded-xl p-1 mb-8 w-fit">
+        <div className="flex flex-wrap gap-1 bg-muted rounded-xl p-1 mb-8 w-fit max-w-full">
           {[
             { key: "request" as const, label: "Novo Serviço", icon: Search },
+            { key: "requested" as const, label: "Serviços Solicitados", icon: MessageSquare },
             { key: "history" as const, label: "Serviços Realizados", icon: ClipboardList },
           ].map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 activeTab === tab.key
                   ? "bg-card shadow-sm text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <tab.icon className="w-4 h-4" />
-              {tab.label}
+              <tab.icon className="w-4 h-4 shrink-0" />
+              <span className="whitespace-nowrap">{tab.label}</span>
             </button>
           ))}
         </div>
 
-        {activeTab === "request" ? (
+        {activeTab === "requested" ? (
+          <div className="space-y-6">
+            <div>
+              <h1 className="font-display text-2xl font-bold text-foreground mb-1">Serviços Solicitados</h1>
+              <p className="text-muted-foreground">
+                Em aberto você pode conversar com o prestador. No histórico, apenas visualização.
+              </p>
+            </div>
+
+            <div className="flex gap-1 bg-muted rounded-xl p-1 w-fit">
+              {(
+                [
+                  { key: "open" as const, label: "Em aberto" },
+                  { key: "historico" as const, label: "Histórico" },
+                ] as const
+              ).map((seg) => (
+                <button
+                  key={seg.key}
+                  type="button"
+                  onClick={() => setRequestedSegment(seg.key)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    requestedSegment === seg.key
+                      ? "bg-card shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {seg.label}
+                </button>
+              ))}
+            </div>
+
+            {clientRequestsQuery.isLoading ? (
+              <div className="text-center py-12 text-muted-foreground">Carregando...</div>
+            ) : clientRequestsQuery.isError ? (
+              <div className="text-center py-12 text-muted-foreground">Nao foi possivel carregar os pedidos.</div>
+            ) : requestedSegment === "open" ? (
+              openRequests.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground rounded-xl border border-dashed border-border">
+                  Nenhum serviço em aberto. Solicite um novo serviço na aba anterior.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {openRequests.map((r) => (
+                    <motion.button
+                      key={r.id}
+                      type="button"
+                      layout
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      onClick={() => navigate(`/chat/${r.id}`)}
+                      className="w-full text-left p-5 rounded-xl bg-card shadow-card border border-border hover:border-accent/40 transition-colors flex items-start gap-4"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <p className="font-semibold text-card-foreground">{r.provider}</p>
+                          <Badge variant="secondary" className="font-normal">
+                            {r.statusLabel}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {r.service} • {r.time}
+                        </p>
+                        <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{r.desc}</p>
+                      </div>
+                      <ArrowRight className="w-5 h-5 text-muted-foreground shrink-0 mt-1" />
+                    </motion.button>
+                  ))}
+                </div>
+              )
+            ) : historicRequests.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground rounded-xl border border-dashed border-border">
+                Nenhum pedido no histórico ainda.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {historicRequests.map((r) => (
+                  <motion.button
+                    key={r.id}
+                    type="button"
+                    layout
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    onClick={() => navigate(`/chat/${r.id}`)}
+                    className="w-full text-left p-5 rounded-xl bg-card shadow-card border border-border hover:border-accent/40 transition-colors flex items-start gap-4"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <p className="font-semibold text-card-foreground">{r.provider}</p>
+                        <Badge variant="outline" className="font-normal">
+                          {r.statusLabel}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {r.service} • {r.time}
+                      </p>
+                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{r.desc}</p>
+                      <p className="text-xs text-muted-foreground/80 mt-2">Somente leitura</p>
+                    </div>
+                    <ArrowRight className="w-5 h-5 text-muted-foreground shrink-0 mt-1" />
+                  </motion.button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : activeTab === "request" ? (
           <>
             <div className="mb-8">
               <h1 className="font-display text-2xl font-bold text-foreground mb-1">O que você precisa?</h1>

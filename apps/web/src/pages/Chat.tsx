@@ -78,18 +78,19 @@ const Chat = () => {
     queryKey: ["request", requestId],
     queryFn: () => getRequest(requestId),
     enabled: Boolean(requestId),
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    refetchInterval: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchInterval: 5000,
   });
 
   const messagesQuery = useQuery({
     queryKey: ["messages", requestId],
     queryFn: () => getMessages(requestId),
     enabled: Boolean(requestId),
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    refetchInterval: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    // Fallback when in-memory WS broadcast does not reach the other client (e.g. serverless multi-instance).
+    refetchInterval: 3000,
   });
 
   const sendMutation = useMutation({
@@ -177,16 +178,6 @@ const Chat = () => {
     enabled: Boolean(requestId),
     onEvent: handleSocketEvent,
   });
-
-  useEffect(() => {
-    const req = requestQuery.data;
-    if (!req || req.status !== "completed") return;
-    if (isClient) {
-      navigate("/client/home", { state: { openHistory: true, rateRequestId: requestId } });
-    } else {
-      navigate("/provider/dashboard");
-    }
-  }, [requestQuery.data?.status, isClient, requestId, navigate]);
 
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
@@ -406,7 +397,9 @@ const Chat = () => {
         <div className="bg-card border-t border-border p-4">
           <div className="container text-center space-y-3">
             <p className="text-sm text-muted-foreground">
-              {uiStatus === "completed" ? "Servico finalizado! Redirecionando..." : "Servico cancelado."}
+              {uiStatus === "completed"
+                ? "Servico finalizado. Esta conversa e apenas para consulta."
+                : "Servico cancelado. Apenas visualizacao."}
             </p>
             <Button variant="hero" size="sm" onClick={() => navigate(backPath)}>
               Voltar ao Inicio
