@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { SERVICE_IDS } from "../../../domain/value-objects/service-id.js";
-import { registerClient } from "../../../application/auth/registerClient.js";
-import { registerProvider } from "../../../application/auth/registerProvider.js";
+import { registerClient } from "../../../application/auth/register-client.js";
+import { registerProvider } from "../../../application/auth/register-provider.js";
 import { login } from "../../../application/auth/login.js";
-import { sanitizeUser } from "../../../application/auth/sanitizeUser.js";
+import { sanitizeUser } from "../../../application/auth/sanitize-user.js";
 import type { IUserRepository } from "../../../domain/ports/user-repository.js";
 import type { IPasswordHasher } from "../../../domain/ports/password-hasher.js";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";

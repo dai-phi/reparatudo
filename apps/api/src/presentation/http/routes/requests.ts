@@ -5,7 +5,7 @@ import type { IUserRepository } from "../../../domain/ports/user-repository.js";
 import type { IRequestRepository } from "../../../domain/ports/request-repository.js";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";
 import type { IRealtimeBroadcaster } from "../../../domain/ports/realtime-broadcaster.js";
-import { formatRequestDetails } from "../mappers/requestDetailsMapper.js";
+import { formatRequestDetails } from "../mappers/request-details-mapper.js";
 import { parseCurrencyInput } from "../../utils/format.js";
 import {
   acceptRequest,
@@ -18,7 +18,7 @@ import {
   rejectRequest,
   sendMessage,
   type RequestWorkflowDeps,
-} from "../../../application/requests/requestWorkflow.js";
+} from "../../../application/requests/request-workflow.js";
 
 const createRequestSchema = z.object({
   serviceId: z.enum(SERVICE_IDS),

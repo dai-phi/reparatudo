@@ -4,7 +4,7 @@ import type { IPasswordHasher } from "../../domain/ports/password-hasher.js";
 import type { IGeoService } from "../../domain/ports/geo-service.js";
 import type { UserRecord } from "../../domain/entities/records.js";
 import type { ServiceId } from "../../domain/value-objects/service-id.js";
-import type { AuthFailure, AuthSuccess } from "./registerClient.js";
+import type { AuthFailure, AuthSuccess } from "./register-client.js";
 
 export type RegisterProviderInput = {
   name: string;
