@@ -1,11 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { pool } from "../../../infrastructure/persistence/pool.js";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
-import { RequestStatusLabels } from "../../../domain/value-objects/description-labels-enum.js";
-import { StatusEnum } from "../../../domain/value-objects/status-enum.js";
+import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
+import { PostgresProviderRepository } from "../../../infrastructure/persistence/postgres-provider-repository.js";
 
 const FREE_TRIAL_MONTHS = 2;
 
@@ -66,11 +65,11 @@ const createPaymentSchema = z.object({
 function providerRequestStatusLabel(status: string): string {
   switch (status) {
     case StatusEnum.CONFIRMED:
-      return RequestStatusLabels.IN_SERVICE;
+      return RequestStatusLabel.IN_SERVICE;
     case StatusEnum.ACCEPTED:
-      return RequestStatusLabels.IN_NEGOTIATION;
+      return RequestStatusLabel.IN_NEGOTIATION;
     case StatusEnum.OPEN:
-      return RequestStatusLabels.NEW;
+      return RequestStatusLabel.NEW;
     default:
       return status;
   }
@@ -90,25 +89,18 @@ function providerPendingStepLabel(status: string, providerConfirmed: boolean, cl
   return null;
 }
 
-export async function registerProviderRoutes(app: FastifyInstance) {
+export async function registerProviderRoutes(
+  app: FastifyInstance,
+  providers: PostgresProviderRepository = new PostgresProviderRepository()
+) {
   app.get("/provider/requests", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "provider") {
       return reply.code(403).send({ message: "Acesso negado" });
     }
 
-    const result = await pool.query(
-      `SELECT r.id, r.service_id, r.description, r.created_at, r.updated_at, r.status, r.agreed_value,
-              r.client_confirmed, r.provider_confirmed, u.name as client_name
-       FROM requests r
-       LEFT JOIN users u ON u.id = r.client_id
-       WHERE r.provider_id = $1 AND r.status IN ('open', 'accepted', 'confirmed')
-       ORDER BY
-         CASE WHEN r.status = 'confirmed' THEN 0 ELSE 1 END,
-         r.updated_at DESC`,
-      [request.user.sub]
-    );
+    const result = await providers.listActiveRequests(request.user.sub);
 
-    const items = result.rows.map((row) => {
+    const items = result.map((row) => {
       const status = String(row.status);
       const providerConfirmed = Boolean(row.provider_confirmed);
       const clientConfirmed = Boolean(row.client_confirmed);
@@ -136,23 +128,11 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       return reply.code(403).send({ message: "Acesso negado" });
     }
 
-    const completedResult = await pool.query(
-      `SELECT COUNT(*)::int as total, COALESCE(SUM(agreed_value), 0) as earnings
-       FROM requests
-       WHERE provider_id = $1 AND status = 'completed'`,
-      [request.user.sub]
-    );
+    const stats = await providers.getCompletedStats(request.user.sub);
 
-    const ratingResult = await pool.query(
-      `SELECT AVG(rating) as rating_avg
-       FROM ratings
-       WHERE provider_id = $1`,
-      [request.user.sub]
-    );
-
-    const completed = completedResult.rows[0];
+    const completed = stats.completed;
     const total = Number(completed?.total || 0);
-    const ratingAvg = ratingResult.rows[0]?.rating_avg ? Number(ratingResult.rows[0].rating_avg) : 0;
+    const ratingAvg = stats.rating?.rating_avg ? Number(stats.rating.rating_avg) : 0;
     const earnings = Number(completed?.earnings || 0);
 
     return reply.send({
@@ -169,16 +149,9 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       return reply.code(403).send({ message: "Acesso negado" });
     }
 
-    const result = await pool.query(
-      `SELECT r.id, r.service_id, r.description, r.completed_at, r.updated_at, r.agreed_value, u.name as client_name
-       FROM requests r
-       LEFT JOIN users u ON u.id = r.client_id
-       WHERE r.provider_id = $1 AND r.status = 'completed'
-       ORDER BY r.completed_at DESC NULLS LAST, r.updated_at DESC`,
-      [request.user.sub]
-    );
+    const result = await providers.listHistory(request.user.sub);
 
-    const items = result.rows.map((row) => {
+    const items = result.map((row) => {
       const agreedValue = Number(row.agreed_value || 0);
       return {
         id: row.id,
@@ -198,8 +171,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       return reply.code(403).send({ message: "Acesso negado" });
     }
 
-    const userResult = await pool.query(`SELECT created_at FROM users WHERE id = $1 AND role = 'provider'`, [request.user.sub]);
-    const row = userResult.rows[0];
+    const row = await providers.findProviderCreatedAt(request.user.sub);
     if (!row) {
       return reply.code(404).send({ message: "Usuario nao encontrado" });
     }
@@ -209,12 +181,8 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     const now = new Date();
     const inFreePeriod = now < freeEndsAt;
 
-    const paidResult = await pool.query(
-      `SELECT reference_month::text as k FROM provider_payments
-       WHERE provider_id = $1 AND status = 'paid'`,
-      [request.user.sub]
-    );
-    const paidSet = new Set<string>(paidResult.rows.map((r) => monthKeyFromDb(r.k)));
+    const paidResult = await providers.listPaidReferenceMonths(request.user.sub);
+    const paidSet = new Set<string>(paidResult.map((r) => monthKeyFromDb(r.k)));
 
     const unpaidMonths: { referenceMonth: string; label: string }[] = [];
     if (!inFreePeriod) {
@@ -249,13 +217,9 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       return reply.code(403).send({ message: "Acesso negado" });
     }
 
-    const result = await pool.query(
-      `SELECT id, amount, payment_method, status, reference_month, paid_at, pix_copy_paste, card_last_four, created_at
-       FROM provider_payments WHERE provider_id = $1 ORDER BY paid_at DESC, created_at DESC`,
-      [request.user.sub]
-    );
+    const result = await providers.listPayments(request.user.sub);
 
-    const items = result.rows.map((r) => {
+    const items = result.map((r) => {
       const amount = Number(r.amount);
       return {
         id: r.id,
@@ -291,8 +255,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Informe os ultimos 4 digitos do cartao" });
     }
 
-    const userResult = await pool.query(`SELECT created_at FROM users WHERE id = $1 AND role = 'provider'`, [request.user.sub]);
-    const urow = userResult.rows[0];
+    const urow = await providers.findProviderCreatedAt(request.user.sub);
     if (!urow) {
       return reply.code(404).send({ message: "Usuario nao encontrado" });
     }
@@ -304,11 +267,8 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Voce ainda esta no periodo gratuito. Nao e necessario pagar." });
     }
 
-    const paidResult = await pool.query(
-      `SELECT reference_month FROM provider_payments WHERE provider_id = $1 AND status = 'paid'`,
-      [request.user.sub]
-    );
-    const paidSet = new Set<string>(paidResult.rows.map((r) => monthKeyFromDb(r.reference_month)));
+    const paidResult = await providers.listPaidReferenceMonthsRaw(request.user.sub);
+    const paidSet = new Set<string>(paidResult.map((r) => monthKeyFromDb(r.reference_month)));
 
     const firstBillMonth = startOfMonth(freeEndsAt);
     const currentMonth = startOfMonth(now);
@@ -337,22 +297,18 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       pixCopyPaste = payload.slice(0, 180);
     }
 
-    await pool.query(
-      `INSERT INTO provider_payments (id, provider_id, amount, payment_method, status, reference_month, paid_at, pix_copy_paste, card_last_four, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'paid', $5, $6, $7, $8, $9, $10)`,
-      [
-        id,
-        request.user.sub,
-        fee,
-        paymentMethod,
-        competenciaKey,
-        ts,
-        pixCopyPaste,
-        paymentMethod === "pix" ? null : cardLastFour ?? null,
-        ts,
-        ts,
-      ]
-    );
+    await providers.insertPayment({
+      id,
+      providerId: request.user.sub,
+      amount: fee,
+      paymentMethod,
+      referenceMonth: competenciaKey,
+      paidAt: ts,
+      pixCopyPaste,
+      cardLastFour: paymentMethod === "pix" ? null : cardLastFour ?? null,
+      createdAt: ts,
+      updatedAt: ts,
+    });
 
     return reply.code(201).send({
       id,

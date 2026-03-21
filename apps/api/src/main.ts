@@ -7,6 +7,10 @@ import websocket from "@fastify/websocket";
 import { initDb } from "./infrastructure/persistence/init-db.js";
 import { PostgresUserRepository } from "./infrastructure/persistence/postgres-user-repository.js";
 import { PostgresRequestRepository } from "./infrastructure/persistence/postgres-request-repository.js";
+import { PostgresClientRepository } from "./infrastructure/persistence/postgres-client-repository.js";
+import { PostgresProviderRepository } from "./infrastructure/persistence/postgres-provider-repository.js";
+import { PostgresProfileRepository } from "./infrastructure/persistence/postgres-profile-repository.js";
+import { PostgresProviderSearchRepository } from "./infrastructure/persistence/postgres-provider-search-repository.js";
 import { PostgresGeoService } from "./infrastructure/geo/postgres-geo-service.js";
 import { BcryptPasswordHasher } from "./infrastructure/auth/password-hasher.js";
 import { RealtimeBroadcasterAdapter } from "./infrastructure/realtime/realtime-broadcaster-adapter.js";
@@ -40,6 +44,10 @@ await app.register(websocket);
 
 const users = new PostgresUserRepository();
 const requests = new PostgresRequestRepository();
+const clients = new PostgresClientRepository();
+const providers = new PostgresProviderRepository();
+const profiles = new PostgresProfileRepository();
+const providerSearch = new PostgresProviderSearchRepository();
 const geo = new PostgresGeoService();
 const passwordHasher = new BcryptPasswordHasher();
 const realtime = new RealtimeBroadcasterAdapter();
@@ -52,11 +60,11 @@ app.get("/health", async () => ({ status: "ok" }));
 await initDb();
 
 await registerAuthRoutes(app, { users, geo, passwordHasher });
-await registerMeRoutes(app);
-await registerClientRoutes(app);
-await registerProviderRoutes(app);
+await registerMeRoutes(app, profiles);
+await registerClientRoutes(app, clients);
+await registerProviderRoutes(app, providers);
 await registerRequestRoutes(app, { users, requests, geo, realtime });
-await registerProviderSearchRoutes(app);
+await registerProviderSearchRoutes(app, providerSearch);
 
 const port = Number(process.env.PORT || 3333);
 const host = process.env.HOST || "0.0.0.0";

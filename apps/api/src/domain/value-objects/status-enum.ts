@@ -13,3 +13,13 @@ export enum StatusEnum {
     REJECTED_BY_SYSTEM = "rejected_by_system",
     COMPLETED_BY_SYSTEM = "completed_by_system",
 }
+
+export enum RequestStatusLabel {
+    NEW = "Novo pedido",
+    WAITING_PROVIDER = "Aguardando prestador",
+    IN_NEGOTIATION = "Em negociação",
+    IN_SERVICE = "Em atendimento",
+    COMPLETED = "Finalizado",
+    CANCELLED = "Cancelado pelo cliente",
+    REJECTED = "Recusado pelo prestador",
+  }

@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { pool } from "../../../infrastructure/persistence/pool.js";
 import { sanitizeUser } from "../../../application/auth/sanitize-user.js";
 import { PostgresGeoService } from "../../../infrastructure/geo/postgres-geo-service.js";
+import { PostgresProfileRepository } from "../../../infrastructure/persistence/postgres-profile-repository.js";
 
 const geo = new PostgresGeoService();
 
@@ -30,10 +30,12 @@ const updateProviderSchema = z.object({
   photoUrl: z.string().url().optional().nullable(),
 });
 
-export async function registerMeRoutes(app: FastifyInstance) {
+export async function registerMeRoutes(
+  app: FastifyInstance,
+  profiles: PostgresProfileRepository = new PostgresProfileRepository()
+) {
   app.get("/me", { preHandler: [app.authenticate] }, async (request, reply) => {
-    const result = await pool.query("SELECT * FROM users WHERE id = $1", [request.user.sub]);
-    const user = result.rows[0];
+    const user = await profiles.findById(request.user.sub);
 
     if (!user) {
       return reply.code(404).send({ message: "Usuario nao encontrado" });
@@ -66,8 +68,7 @@ export async function registerMeRoutes(app: FastifyInstance) {
   });
 
   app.patch("/me", { preHandler: [app.authenticate] }, async (request, reply) => {
-    const result = await pool.query("SELECT * FROM users WHERE id = $1", [request.user.sub]);
-    const user = result.rows[0];
+    const user = await profiles.findById(request.user.sub);
 
     if (!user) {
       return reply.code(404).send({ message: "Usuario nao encontrado" });
@@ -181,12 +182,11 @@ export async function registerMeRoutes(app: FastifyInstance) {
     updates.push(`updated_at = $${idx++}`);
     values.push(now);
 
-    values.push(request.user.sub);
-
-    await pool.query(`UPDATE users SET ${updates.join(", ")} WHERE id = $${idx} `, values);
-
-    const updated = await pool.query("SELECT * FROM users WHERE id = $1", [request.user.sub]);
-    const fresh = updated.rows[0];
+    await profiles.updateById(request.user.sub, updates, values);
+    const fresh = await profiles.findById(request.user.sub);
+    if (!fresh) {
+      return reply.code(404).send({ message: "Usuario nao encontrado" });
+    }
 
     return reply.send(
       sanitizeUser({

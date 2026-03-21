@@ -13,27 +13,3 @@ export enum ServicesDescriptions {
   MONTAGEM = "Móveis, prateleiras",
   REPAROS = "Diversos serviços",
 }
-
-export enum RequestStatusLabels {
-  NEW = "Novo pedido",
-  WAITING_PROVIDER = "Aguardando prestador",
-  IN_NEGOTIATION = "Em negociação",
-  IN_SERVICE = "Em atendimento",
-  COMPLETED = "Finalizado",
-  CANCELLED = "Cancelado pelo cliente",
-  REJECTED = "Recusado pelo prestador",
-}
-
-
-
-export enum PaymentMethodsLabels {
-  PIX = "PIX",
-  CREDIT_CARD = "Cartão de crédito",
-  DEBIT_CARD = "Cartão de débito",
-}
-
-export enum PaymentStatusLabels {
-  PAID = "Pago",
-  PENDING = "Pendente",
-  CANCELLED = "Cancelado",
-}

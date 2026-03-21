@@ -297,7 +297,7 @@ export async function confirmRequest(
   const providerConfirmed = Boolean(refreshed?.providerConfirmed);
 
   let statusChanged = false;
-  if (clientConfirmed && providerConfirmed && refreshed && refreshed.status !== "confirmed") {
+  if (clientConfirmed && providerConfirmed && refreshed && refreshed.status !== "confirmed") {  
     await deps.requests.setConfirmedStatus({ requestId: target.id, now });
     statusChanged = true;
   }
