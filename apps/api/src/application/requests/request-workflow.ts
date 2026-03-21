@@ -436,7 +436,7 @@ export async function completeRequest(
     });
   }
 
-  const messageText = "🎉 Servico finalizado! Obrigado por usar o FixJa.";
+  const messageText = "🎉 Servico finalizado! Obrigado por usar o Repara Tudo!";
   const messageId = randomUUID();
 
   await deps.requests.insertMessage({
