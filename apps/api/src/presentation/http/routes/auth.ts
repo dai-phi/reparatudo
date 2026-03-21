@@ -177,7 +177,8 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
   });
 
   app.post("/auth/logout", async (_request, reply) => {
-    reply.clearCookie("token", { path: "/" });
+    const secure = process.env.NODE_ENV === "production";
+    reply.clearCookie("token", { path: "/", sameSite: "lax", secure });
     return reply.code(204).send();
   });
 }

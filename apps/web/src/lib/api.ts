@@ -1,3 +1,5 @@
+import { queryClient } from "./queryClient";
+
 export type Role = "client" | "provider";
 
 export interface User {
@@ -133,6 +135,7 @@ export async function logout() {
     await fetch(`${API_URL}/auth/logout`, { method: "POST", credentials: "include" });
   } finally {
     clearAuth();
+    queryClient.clear();
   }
 }
 
