@@ -214,7 +214,7 @@ const ClientHome = () => {
             <div className="w-8 h-8 rounded-lg bg-gradient-accent flex items-center justify-center">
               <Wrench className="w-4 h-4 text-accent-foreground" />
             </div>
-            <span className="font-display text-lg font-bold text-foreground">FixJá</span>
+            <span className="font-display text-lg font-bold text-foreground">Repara Tudo!</span>
           </div>
           <div className="flex items-center gap-3">
             <button className="p-2 text-muted-foreground hover:text-foreground">

@@ -28,7 +28,7 @@ const Index = () => {
             <div className="w-9 h-9 rounded-lg bg-gradient-accent flex items-center justify-center">
               <Wrench className="w-5 h-5 text-accent-foreground" />
             </div>
-            <span className="font-display text-xl font-bold text-foreground">FixJá</span>
+            <span className="font-display text-xl font-bold text-foreground">Repara Tudo!</span>
           </Link>
           <div className="flex items-center gap-3">
             <Link to="/login">
@@ -189,9 +189,9 @@ const Index = () => {
             <div className="w-7 h-7 rounded-md bg-gradient-accent flex items-center justify-center">
               <Wrench className="w-4 h-4 text-accent-foreground" />
             </div>
-            <span className="font-display font-bold text-foreground">FixJá</span>
+            <span className="font-display font-bold text-foreground">Repara Tudo!</span>
           </div>
-          <p className="text-sm text-muted-foreground">© 2026 FixJá. Todos os direitos reservados.</p>
+          <p className="text-sm text-muted-foreground">© 2026 Repara Tudo!. Todos os direitos reservados.</p>
         </div>
       </footer>
     </div>

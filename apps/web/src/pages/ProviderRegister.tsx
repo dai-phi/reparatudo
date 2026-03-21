@@ -96,7 +96,7 @@ const ProviderRegister = () => {
             <div className="w-10 h-10 rounded-lg bg-gradient-accent flex items-center justify-center">
               <Wrench className="w-6 h-6 text-accent-foreground" />
             </div>
-            <span className="font-display text-2xl font-bold text-primary-foreground">FixJá</span>
+            <span className="font-display text-2xl font-bold text-primary-foreground">Repara Tudo!</span>
           </div>
           <h2 className="font-display text-4xl font-bold text-primary-foreground mb-4">
             Ganhe dinheiro com suas habilidades
