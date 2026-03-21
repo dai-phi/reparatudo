@@ -27,6 +27,7 @@ function mapRequestRow(row: Record<string, unknown>): RequestRecord {
     providerConfirmed: row.provider_confirmed != null ? Boolean(row.provider_confirmed) : null,
     acceptedAt: row.accepted_at != null ? String(row.accepted_at) : null,
     confirmedAt: row.confirmed_at != null ? String(row.confirmed_at) : null,
+    cancellationReason: row.cancellation_reason != null ? String(row.cancellation_reason) : null,
     locationLat: row.location_lat != null ? Number(row.location_lat) : null,
     locationLng: row.location_lng != null ? Number(row.location_lng) : null,
     createdAt: String(row.created_at),
@@ -132,9 +133,10 @@ export class PostgresRequestRepository implements IRequestRepository {
     ]);
   }
 
-  async updateCancel(params: { requestId: string; now: string }): Promise<void> {
-    await this.db.query(`UPDATE requests SET status = $1, updated_at = $2 WHERE id = $3`, [
+  async updateCancel(params: { requestId: string; now: string; reason: string | null }): Promise<void> {
+    await this.db.query(`UPDATE requests SET status = $1, cancellation_reason = $2, updated_at = $3 WHERE id = $4`, [
       "cancelled",
+      params.reason,
       params.now,
       params.requestId,
     ]);

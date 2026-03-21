@@ -40,6 +40,10 @@ const statusValueSchema = z.object({
   agreedValue: z.string().optional().nullable(),
 });
 
+const cancelSchema = z.object({
+  reason: z.string().trim().max(280).optional().nullable(),
+});
+
 export type RequestRouteDeps = {
   users: IUserRepository;
   requests: IRequestRepository;
@@ -202,9 +206,19 @@ export async function registerRequestRoutes(app: FastifyInstance, deps: RequestR
   });
 
   app.post("/requests/:id/cancel", { preHandler: [app.authenticate] }, async (request, reply) => {
+    const parsed = cancelSchema.safeParse(request.body || {});
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Dados invalidos" });
+    }
+
     const result = await cancelRequest(
       workflowDeps,
-      { requestId: (request.params as RequestParams).id, userId: request.user.sub, role: request.user.role },
+      {
+        requestId: (request.params as RequestParams).id,
+        userId: request.user.sub,
+        role: request.user.role,
+        reason: parsed.data.reason,
+      },
       async (id) => details(id)
     );
 

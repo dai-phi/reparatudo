@@ -154,7 +154,7 @@ export async function createRequest(
       id: requestId,
       client: clientName,
       service: serviceLabel,
-      desc: input.description?.trim() || "Sem descricao",
+      desc: input.description?.trim() || "Sem descrição",
       distance: `${distance.toFixed(1)} km`,
       time: formatRelativeTime(now),
       status: "open",
@@ -345,7 +345,7 @@ export async function confirmRequest(
 
 export async function cancelRequest(
   deps: RequestWorkflowDeps,
-  params: { requestId: string; userId: string; role: Role },
+  params: { requestId: string; userId: string; role: Role; reason?: string | null },
   formatDetails: (id: string) => Promise<unknown>
 ): Promise<
   | {
@@ -365,9 +365,12 @@ export async function cancelRequest(
   }
 
   const now = new Date().toISOString();
-  await deps.requests.updateCancel({ requestId: target.id, now });
+  const reasonText = params.reason?.trim() || null;
+  await deps.requests.updateCancel({ requestId: target.id, now, reason: reasonText });
 
-  const messageText = `❌ Servico cancelado pelo ${params.role === "client" ? "cliente" : "prestador"}.`;
+  const messageText = reasonText
+    ? `❌ Servico cancelado pelo ${params.role === "client" ? "cliente" : "prestador"}. Motivo: ${reasonText}`
+    : `❌ Servico cancelado pelo ${params.role === "client" ? "cliente" : "prestador"}.`;
   const messageId = randomUUID();
 
   await deps.requests.insertMessage({

@@ -4,6 +4,8 @@ import { z } from "zod";
 import { pool } from "../../../infrastructure/persistence/pool.js";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
+import { RequestStatusLabels } from "../../../domain/value-objects/description-labels-enum.js";
+import { StatusEnum } from "../../../domain/value-objects/status-enum.js";
 
 const FREE_TRIAL_MONTHS = 2;
 
@@ -61,6 +63,33 @@ const createPaymentSchema = z.object({
   cardLastFour: z.string().regex(/^\d{4}$/).optional(),
 });
 
+function providerRequestStatusLabel(status: string): string {
+  switch (status) {
+    case StatusEnum.CONFIRMED:
+      return RequestStatusLabels.IN_SERVICE;
+    case StatusEnum.ACCEPTED:
+      return RequestStatusLabels.IN_NEGOTIATION;
+    case StatusEnum.OPEN:
+      return RequestStatusLabels.NEW;
+    default:
+      return status;
+  }
+}
+
+function providerPendingStepLabel(status: string, providerConfirmed: boolean, clientConfirmed: boolean): string | null {
+  if (status !== StatusEnum.ACCEPTED) return null;
+  if (providerConfirmed && !clientConfirmed) {
+    return "Voce já confirmou o serviço. Aguardando o cliente.";
+  }
+  if (!providerConfirmed && clientConfirmed) {
+    return "Cliente ja confirmou o serviço. Falta sua confirmação.";
+  }
+  if (!providerConfirmed && !clientConfirmed) {
+    return "Serviço aceito. Falta confirmar com o cliente.";
+  }
+  return null;
+}
+
 export async function registerProviderRoutes(app: FastifyInstance) {
   app.get("/provider/requests", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "provider") {
@@ -68,23 +97,36 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     }
 
     const result = await pool.query(
-      `SELECT r.id, r.service_id, r.description, r.created_at, r.status, u.name as client_name
+      `SELECT r.id, r.service_id, r.description, r.created_at, r.updated_at, r.status, r.agreed_value,
+              r.client_confirmed, r.provider_confirmed, u.name as client_name
        FROM requests r
        LEFT JOIN users u ON u.id = r.client_id
-       WHERE r.provider_id = $1 AND r.status IN ('open', 'accepted')
-       ORDER BY r.created_at DESC`,
+       WHERE r.provider_id = $1 AND r.status IN ('open', 'accepted', 'confirmed')
+       ORDER BY
+         CASE WHEN r.status = 'confirmed' THEN 0 ELSE 1 END,
+         r.updated_at DESC`,
       [request.user.sub]
     );
 
-    const items = result.rows.map((row) => ({
-      id: row.id,
-      client: row.client_name ?? "Cliente",
-      service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
-      desc: row.description || "Sem descricao",
-      distance: "2.3 km",
-      time: formatRelativeTime(row.created_at),
-      status: row.status,
-    }));
+    const items = result.rows.map((row) => {
+      const status = String(row.status);
+      const providerConfirmed = Boolean(row.provider_confirmed);
+      const clientConfirmed = Boolean(row.client_confirmed);
+      return {
+        id: row.id,
+        client: row.client_name ?? "Cliente",
+        service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
+        desc: row.description || "Sem descrição",
+        distance: "2.3 km",
+        time: formatRelativeTime(row.updated_at || row.created_at),
+        status,
+        statusLabel: providerRequestStatusLabel(status),
+        pendingStepLabel: providerPendingStepLabel(status, providerConfirmed, clientConfirmed),
+        value: formatCurrency(Number(row.agreed_value || 0)),
+        providerConfirmed,
+        clientConfirmed,
+      };
+    });
 
     return reply.send(items);
   });
@@ -120,6 +162,35 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       monthEarningsLabel: formatCurrency(earnings),
       avgResponseMins: total > 0 ? 35 : 0,
     });
+  });
+
+  app.get("/provider/history", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "provider") {
+      return reply.code(403).send({ message: "Acesso negado" });
+    }
+
+    const result = await pool.query(
+      `SELECT r.id, r.service_id, r.description, r.completed_at, r.updated_at, r.agreed_value, u.name as client_name
+       FROM requests r
+       LEFT JOIN users u ON u.id = r.client_id
+       WHERE r.provider_id = $1 AND r.status = 'completed'
+       ORDER BY r.completed_at DESC NULLS LAST, r.updated_at DESC`,
+      [request.user.sub]
+    );
+
+    const items = result.rows.map((row) => {
+      const agreedValue = Number(row.agreed_value || 0);
+      return {
+        id: row.id,
+        client: row.client_name ?? "Cliente",
+        service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
+        desc: row.description || "Sem descrição",
+        date: formatDate(row.completed_at || row.updated_at),
+        value: formatCurrency(agreedValue),
+      };
+    });
+
+    return reply.send(items);
   });
 
   app.get("/provider/billing/summary", { preHandler: [app.authenticate] }, async (request, reply) => {

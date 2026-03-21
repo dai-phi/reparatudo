@@ -56,7 +56,7 @@ export interface IRequestRepository {
   listMessages(requestId: string): Promise<MessageRow[]>;
   updateAccept(params: { requestId: string; providerId: string; now: string }): Promise<void>;
   updateReject(params: { requestId: string; now: string }): Promise<void>;
-  updateCancel(params: { requestId: string; now: string }): Promise<void>;
+  updateCancel(params: { requestId: string; now: string; reason: string | null }): Promise<void>;
   updateComplete(params: { requestId: string; now: string }): Promise<void>;
   confirmStep(params: {
     requestId: string;

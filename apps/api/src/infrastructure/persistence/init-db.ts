@@ -39,6 +39,7 @@ export async function initDb() {
       provider_confirmed BOOLEAN DEFAULT false,
       accepted_at TIMESTAMPTZ,
       confirmed_at TIMESTAMPTZ,
+      cancellation_reason TEXT,
       location_lat DOUBLE PRECISION,
       location_lng DOUBLE PRECISION,
       created_at TIMESTAMPTZ NOT NULL,
@@ -107,6 +108,7 @@ export async function initDb() {
     ALTER TABLE requests ADD COLUMN IF NOT EXISTS provider_confirmed BOOLEAN DEFAULT false;
     ALTER TABLE requests ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
     ALTER TABLE requests ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
+    ALTER TABLE requests ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_service_lat DOUBLE PRECISION;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_service_lng DOUBLE PRECISION;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_service_at TIMESTAMPTZ;

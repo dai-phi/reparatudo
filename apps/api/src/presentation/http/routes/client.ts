@@ -16,9 +16,9 @@ function statusMeta(status: string): { label: string; chatOpen: boolean } {
     case "open":
       return { label: "Aguardando prestador", chatOpen: true };
     case "accepted":
-      return { label: "Em negociacao", chatOpen: true };
+      return { label: "Em negociação", chatOpen: true };
     case "confirmed":
-      return { label: "Servico confirmado", chatOpen: true };
+      return { label: "Serviço confirmado", chatOpen: true };
     case "completed":
       return { label: "Finalizado", chatOpen: false };
     case "cancelled":
@@ -51,7 +51,7 @@ export async function registerClientRoutes(app: FastifyInstance) {
         id: row.id,
         provider: row.provider_name ?? "Prestador",
         service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
-        desc: row.description || "Sem descricao",
+        desc: row.description || "Sem descrição",
         status: String(row.status),
         statusLabel: meta.label,
         chatOpen: meta.chatOpen,
@@ -82,7 +82,7 @@ export async function registerClientRoutes(app: FastifyInstance) {
       id: row.id,
       provider: row.provider_name ?? "Prestador",
       service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
-      desc: row.description || "Sem descricao",
+      desc: row.description || "Sem descrição",
       date: formatDate(row.completed_at || row.updated_at),
       value: formatCurrency(Number(row.agreed_value || 0)),
       rated: Boolean(row.rating),

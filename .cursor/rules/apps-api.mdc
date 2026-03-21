@@ -43,3 +43,7 @@ alwaysApply: false
 ## Scripts (`apps/api`)
 
 - `npm`: `dev` (tsx watch), `typecheck` (`tsc -p tsconfig.json`), `lint` (`eslint .`).
+
+## Banco de dados
+
+- Sempre em ingles as tabelas

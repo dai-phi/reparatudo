@@ -33,6 +33,11 @@ export interface RequestSummary {
   distance: string;
   time: string;
   status?: string;
+  statusLabel?: string;
+  value?: string;
+  pendingStepLabel?: string | null;
+  providerConfirmed?: boolean;
+  clientConfirmed?: boolean;
 }
 
 export interface ProviderStats {
@@ -41,6 +46,15 @@ export interface ProviderStats {
   monthEarnings: number;
   monthEarningsLabel: string;
   avgResponseMins: number;
+}
+
+export interface ProviderHistoryItem {
+  id: string;
+  client: string;
+  service: string;
+  desc: string;
+  date: string;
+  value: string;
 }
 
 export type ProviderPaymentMethod = "pix" | "cartao_credito" | "cartao_debito";
@@ -334,6 +348,10 @@ export function getProviderStats() {
   return apiFetch<ProviderStats>("/provider/stats", { auth: true });
 }
 
+export function getProviderHistory() {
+  return apiFetch<ProviderHistoryItem[]>("/provider/history", { auth: true });
+}
+
 export function getProviderBillingSummary() {
   return apiFetch<ProviderBillingSummary>("/provider/billing/summary", { auth: true });
 }
@@ -393,10 +411,11 @@ export function confirmRequest(id: string, agreedValue?: string) {
   });
 }
 
-export function cancelRequest(id: string) {
+export function cancelRequest(id: string, reason?: string) {
   return apiFetch<{ request: RequestDetails; message: ChatMessage }>(`/requests/${id}/cancel`, {
     method: "POST",
     auth: true,
+    body: reason ? { reason } : {},
   });
 }
 

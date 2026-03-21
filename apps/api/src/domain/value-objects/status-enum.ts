@@ -1,0 +1,15 @@
+export enum StatusEnum {
+    OPEN = "open",
+    ACCEPTED = "accepted",
+    CONFIRMED = "confirmed",
+    COMPLETED = "completed",
+    CANCELLED = "cancelled",
+    REJECTED = "rejected",
+    CANCELLED_BY_CLIENT = "cancelled_by_client",
+    CANCELLED_BY_PROVIDER = "cancelled_by_provider",
+    REJECTED_BY_CLIENT = "rejected_by_client",
+    REJECTED_BY_PROVIDER = "rejected_by_provider",
+    CANCELLED_BY_SYSTEM = "cancelled_by_system",
+    REJECTED_BY_SYSTEM = "rejected_by_system",
+    COMPLETED_BY_SYSTEM = "completed_by_system",
+}
