@@ -198,7 +198,6 @@ const ProviderDashboard = () => {
   const activeRequests = requests.filter((req) => isInService(req.status));
   const upcomingRequests = requests.filter((req) => !isInService(req.status));
   const prioritizedRequests = [...activeRequests, ...upcomingRequests];
-  const featuredRequest = activeRequests[0] ?? null;
   const stats = statsQuery.data;
   const history = historyQuery.data ?? [];
   const statsCards = [
@@ -325,57 +324,16 @@ const ProviderDashboard = () => {
                       <h3 className="font-display text-base font-semibold text-foreground">Em atendimento</h3>
                       <span className="text-xs text-muted-foreground">{activeRequests.length}</span>
                     </div>
-                    {featuredRequest ? (
+                    {activeRequests.length > 0 ? (
                       <div className="space-y-3">
-                        <motion.div
-                          key={featuredRequest.id}
-                          layout
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: 20 }}
-                          className="p-4 rounded-xl bg-accent/10 shadow-card border border-accent/40"
-                        >
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
-                                <Wrench className="w-5 h-5 text-accent" />
-                              </div>
-                              <div>
-                                <p className="font-semibold text-card-foreground">{featuredRequest.client}</p>
-                                <p className="text-sm text-muted-foreground">{featuredRequest.service}</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-semibold text-accent">{requestStatusLabel(featuredRequest)}</p>
-                              <p className="text-xs text-muted-foreground">{featuredRequest.time}</p>
-                            </div>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-2">{featuredRequest.desc}</p>
-                          <p className="text-sm font-semibold text-card-foreground mb-3">Valor: {featuredRequest.value ?? "A combinar"}</p>
-                          <div className="flex justify-end gap-2">
-                          <Button
-                              size="sm"
-                              className="text-white hover:opacity-90"
-                              style={{ backgroundColor: "#0e234e" }}
-                              onClick={() => openFinishDialog(featuredRequest.id)}
-                            >
-                              Finalizar atendimento
-                            </Button>
-                            <Link to={`/chat/${featuredRequest.id}`}>
-                              <Button variant="ghost" size="sm">
-                                <MessageCircle className="w-4 h-4" /> Abrir chat
-                              </Button>
-                            </Link>
-                          </div>
-                        </motion.div>
-                        {activeRequests.slice(1).map((req) => (
+                        {activeRequests.map((req) => (
                           <motion.div
                             key={req.id}
                             layout
                             initial={{ opacity: 0, x: -20 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 20 }}
-                            className="p-4 rounded-xl bg-card shadow-card border border-border"
+                            className="p-4 rounded-xl bg-accent/10 shadow-card border border-accent/40"
                           >
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex items-center gap-3">
