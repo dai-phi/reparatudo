@@ -43,6 +43,50 @@ export interface ProviderStats {
   avgResponseMins: number;
 }
 
+export type ProviderPaymentMethod = "pix" | "cartao_credito" | "cartao_debito";
+
+export interface ProviderBillingSummary {
+  monthlyFee: number;
+  monthlyFeeLabel: string;
+  freeTrialMonths: number;
+  freeEndsAt: string;
+  inFreePeriod: boolean;
+  freeEndsAtLabel: string;
+  unpaidMonths: { referenceMonth: string; label: string }[];
+  hasOutstanding: boolean;
+}
+
+export type ProviderPaymentStatus = "pending" | "paid" | "cancelled";
+
+export interface ProviderPaymentRow {
+  id: string;
+  amount: number;
+  amountLabel: string;
+  paymentMethod: ProviderPaymentMethod;
+  status: ProviderPaymentStatus;
+  referenceMonth: string;
+  referenceMonthLabel: string;
+  paidAt: string;
+  paidAtLabel: string;
+  pixCopyPaste: string | null;
+  cardLastFour: string | null;
+  createdAt: string;
+}
+
+export interface ProviderPaymentCreated {
+  id: string;
+  amount: number;
+  amountLabel: string;
+  paymentMethod: ProviderPaymentMethod;
+  status: "paid";
+  referenceMonth: string;
+  referenceMonthLabel: string;
+  paidAt: string;
+  paidAtLabel: string;
+  pixCopyPaste: string | null;
+  cardLastFour: string | null;
+}
+
 export interface ClientHistoryItem {
   id: string;
   provider: string;
@@ -288,6 +332,25 @@ export function getProviderRequests() {
 
 export function getProviderStats() {
   return apiFetch<ProviderStats>("/provider/stats", { auth: true });
+}
+
+export function getProviderBillingSummary() {
+  return apiFetch<ProviderBillingSummary>("/provider/billing/summary", { auth: true });
+}
+
+export function getProviderBillingPayments() {
+  return apiFetch<ProviderPaymentRow[]>("/provider/billing/payments", { auth: true });
+}
+
+export function createProviderBillingPayment(payload: {
+  paymentMethod: ProviderPaymentMethod;
+  cardLastFour?: string;
+}) {
+  return apiFetch<ProviderPaymentCreated>("/provider/billing/payments", {
+    method: "POST",
+    auth: true,
+    body: payload,
+  });
 }
 
 export function createServiceRequest(payload: { serviceId: string; description?: string; providerId: string }) {

@@ -76,6 +76,23 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_requests_client ON requests(client_id);
     CREATE INDEX IF NOT EXISTS idx_messages_request ON messages(request_id);
     CREATE INDEX IF NOT EXISTS idx_ratings_provider ON ratings(provider_id);
+
+    CREATE TABLE IF NOT EXISTS provider_payments (
+      id TEXT PRIMARY KEY,
+      provider_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount NUMERIC(12, 2) NOT NULL,
+      payment_method TEXT NOT NULL CHECK (payment_method IN ('pix', 'cartao_credito', 'cartao_debito')),
+      status TEXT NOT NULL DEFAULT 'paid' CHECK (status IN ('pending', 'paid', 'cancelled')),
+      reference_month DATE NOT NULL,
+      paid_at TIMESTAMPTZ NOT NULL,
+      pix_copy_paste TEXT,
+      card_last_four TEXT,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_provider_payments_provider ON provider_payments(provider_id);
+    CREATE INDEX IF NOT EXISTS idx_provider_payments_ref ON provider_payments(provider_id, reference_month);
   `);
 
   await pool.query(`
@@ -94,5 +111,36 @@ export async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_service_lng DOUBLE PRECISION;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_service_at TIMESTAMPTZ;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS work_address TEXT;
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF to_regclass('public.pagamento') IS NOT NULL THEN
+        INSERT INTO provider_payments (
+          id, provider_id, amount, payment_method, status, reference_month, paid_at, pix_copy_paste, card_last_four, created_at, updated_at
+        )
+        SELECT
+          id,
+          provider_id,
+          ROUND(valor_centavos::numeric / 100, 2),
+          forma_pagamento,
+          CASE status
+            WHEN 'pendente' THEN 'pending'
+            WHEN 'pago' THEN 'paid'
+            WHEN 'cancelado' THEN 'cancelled'
+            ELSE 'paid'
+          END,
+          referencia_competencia,
+          data_pagamento,
+          pix_copia_e_cola,
+          cartao_ultimos_4,
+          created_at,
+          updated_at
+        FROM pagamento
+        ON CONFLICT (id) DO NOTHING;
+        DROP TABLE pagamento;
+      END IF;
+    END $$;
   `);
 }
