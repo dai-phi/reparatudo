@@ -8,8 +8,10 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import ProviderRegister from "./pages/ProviderRegister";
 import ProviderDashboard from "./pages/ProviderDashboard";
+import ProviderPerfil from "./pages/ProviderPerfil";
 import ClientRegister from "./pages/ClientRegister";
 import ClientHome from "./pages/ClientHome";
+import ClientPerfil from "./pages/ClientPerfil";
 import Chat from "./pages/Chat";
 import Login from "./pages/Login";
 
@@ -23,8 +25,10 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/provider/register" element={<ProviderRegister />} />
           <Route path="/provider/dashboard" element={<ProviderDashboard />} />
+          <Route path="/provider/perfil" element={<ProviderPerfil />} />
           <Route path="/client/register" element={<ClientRegister />} />
           <Route path="/client/home" element={<ClientHome />} />
+          <Route path="/client/perfil" element={<ClientPerfil />} />
           <Route path="/login" element={<Login />} />
           <Route path="/chat/:id" element={<Chat />} />
           <Route path="*" element={<NotFound />} />

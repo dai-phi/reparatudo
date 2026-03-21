@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -223,9 +223,13 @@ const ClientHome = () => {
             <button className="p-2 text-muted-foreground hover:text-foreground" onClick={handleLogout}>
               <LogOut className="w-5 h-5" />
             </button>
-            <div className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center">
+            <Link
+              to="/client/perfil"
+              className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center"
+              title="Meu perfil"
+            >
               <User className="w-5 h-5 text-accent" />
-            </div>
+            </Link>
           </div>
         </div>
       </header>

@@ -1,8 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Wrench, Star, ClipboardList, DollarSign, Clock, MapPin, Bell,
   User, LogOut, Check, X, MessageCircle
@@ -10,7 +8,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ApiError, RequestSummary, acceptRequest, getProviderRequests, getProviderStats, logout, rejectRequest, setStoredUser, updateMe } from "@/lib/api";
+import { ApiError, RequestSummary, acceptRequest, getProviderRequests, getProviderStats, logout, rejectRequest } from "@/lib/api";
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 
@@ -20,27 +18,12 @@ const ProviderDashboard = () => {
   const { data: me } = useAuthUser();
   const queryClient = useQueryClient();
   const [hasNewRequest, setHasNewRequest] = useState(false);
-  const [activeTab, setActiveTab] = useState<"requests" | "profile">("requests");
-  const [profileForm, setProfileForm] = useState({ name: "", phone: "", radiusKm: "", workCep: "", workAddress: "", photoUrl: "" });
 
   useEffect(() => {
     if (me && me.role !== "provider") {
       navigate("/client/home");
     }
   }, [me, navigate]);
-
-  useEffect(() => {
-    if (me) {
-      setProfileForm({
-        name: me.name ?? "",
-        phone: me.phone ?? "",
-        radiusKm: me.radiusKm ? String(me.radiusKm) : "10",
-        workCep: me.workCep ?? "",
-        workAddress: me.workAddress ?? "",
-        photoUrl: me.photoUrl ?? "",
-      });
-    }
-  }, [me]);
 
   const requestsQuery = useQuery({
     queryKey: ["providerRequests"],
@@ -96,19 +79,6 @@ const ProviderDashboard = () => {
     },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: updateMe,
-    onSuccess: (user) => {
-      setStoredUser(user);
-      toast.success("Perfil atualizado!");
-      queryClient.invalidateQueries({ queryKey: ["me"] });
-    },
-    onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel atualizar o perfil";
-      toast.error(message);
-    },
-  });
-
   const handleAccept = (id: string) => {
     setHasNewRequest(false);
     acceptMutation.mutate(id);
@@ -122,17 +92,6 @@ const ProviderDashboard = () => {
   const handleLogout = async () => {
     await logout();
     navigate("/", { replace: true });
-  };
-
-  const handleSaveProfile = () => {
-    updateMutation.mutate({
-      name: profileForm.name.trim() || undefined,
-      phone: profileForm.phone.trim() || undefined,
-      radiusKm: profileForm.radiusKm ? Number(profileForm.radiusKm) : undefined,
-      workCep: profileForm.workCep.replace(/\D/g, "") || undefined,
-      workAddress: profileForm.workAddress.trim() || undefined,
-      photoUrl: profileForm.photoUrl.trim() || undefined,
-    });
   };
 
   const requests = requestsQuery.data ?? [];
@@ -171,9 +130,13 @@ const ProviderDashboard = () => {
             >
               <LogOut className="w-5 h-5" />
             </button>
-            <div className="w-9 h-9 rounded-full bg-accent/20 flex items-center justify-center">
+            <Link
+              to="/provider/perfil"
+              className="w-9 h-9 rounded-full bg-accent/20 flex items-center justify-center"
+              title="Meu perfil"
+            >
               <User className="w-5 h-5 text-accent" />
-            </div>
+            </Link>
           </div>
         </div>
       </header>
@@ -201,29 +164,7 @@ const ProviderDashboard = () => {
           ))}
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 bg-muted rounded-xl p-1 mb-6 w-fit">
-          {[
-            { key: "requests" as const, label: "Pedidos", icon: ClipboardList },
-            { key: "profile" as const, label: "Meu Perfil", icon: User },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                activeTab === tab.key
-                  ? "bg-card shadow-sm text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <tab.icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {activeTab === "requests" ? (
-          <div className="space-y-4">
+        <div className="space-y-4">
             <h2 className="font-display text-lg font-bold text-foreground">Pedidos Próximos</h2>
             <AnimatePresence>
               {requestsQuery.isLoading ? (
@@ -287,79 +228,7 @@ const ProviderDashboard = () => {
                 </div>
               )}
             </AnimatePresence>
-          </div>
-        ) : (
-          <div className="max-w-md space-y-4">
-            <h2 className="font-display text-lg font-bold text-foreground">Editar Perfil</h2>
-            <div className="p-6 rounded-xl bg-card shadow-card space-y-4">
-              <div className="flex items-center gap-4 mb-4">
-                {profileForm.photoUrl ? (
-                  <img src={profileForm.photoUrl} alt="Foto" className="w-16 h-16 rounded-full object-cover" />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center">
-                    <User className="w-8 h-8 text-accent" />
-                  </div>
-                )}
-                <div>
-                  <p className="font-bold text-card-foreground">{me?.name ?? "Profissional"}</p>
-                  <p className="text-sm text-muted-foreground">{me?.email ?? "email@exemplo.com"}</p>
-                </div>
-              </div>
-              <div>
-                <Label>Nome</Label>
-                <Input
-                  value={profileForm.name}
-                  onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>Telefone</Label>
-                <Input
-                  value={profileForm.phone}
-                  onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>Raio de atuação (km)</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={profileForm.radiusKm}
-                  onChange={(e) => setProfileForm((prev) => ({ ...prev, radiusKm: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>Endereço do local de trabalho</Label>
-                <Input
-                  placeholder="Rua, número, bairro, cidade, UF"
-                  value={profileForm.workAddress}
-                  onChange={(e) => setProfileForm((prev) => ({ ...prev, workAddress: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>CEP do local de trabalho</Label>
-                <Input
-                  placeholder="00000-000"
-                  value={profileForm.workCep}
-                  onChange={(e) => setProfileForm((prev) => ({ ...prev, workCep: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>Foto (URL)</Label>
-                <Input
-                  placeholder="https://..."
-                  value={profileForm.photoUrl}
-                  onChange={(e) => setProfileForm((prev) => ({ ...prev, photoUrl: e.target.value }))}
-                />
-                <p className="text-xs text-muted-foreground mt-1">Cole o link de uma imagem para sua foto de perfil</p>
-              </div>
-              <Button variant="hero" className="w-full" onClick={handleSaveProfile} disabled={updateMutation.isPending}>
-                Salvar Alteracoes
-              </Button>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
