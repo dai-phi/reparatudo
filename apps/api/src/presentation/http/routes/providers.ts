@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../../infrastructure/persistence/pool.js";
-import { PostgresGeoService } from "../../../infrastructure/geo/postgresGeoService.js";
+import { PostgresGeoService } from "../../../infrastructure/geo/postgres-geo-service.js";
 import { SERVICE_IDS } from "../../../domain/value-objects/service-id.js";
 
 const geo = new PostgresGeoService();

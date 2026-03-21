@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import type { Role } from "../../domain/entities/role.js";
 import type { IRequestRepository } from "../../domain/ports/request-repository.js";
-import { authorizeWebSocketConnection } from "../../application/websocket/authorizeWebSocketConnection.js";
-import { registerConnection, unregisterConnection } from "../../infrastructure/realtime/wsHub.js";
+import { authorizeWebSocketConnection } from "../../application/websocket/authorize-web-socket-connection.js";
+import { registerConnection, unregisterConnection } from "../../infrastructure/realtime/ws-hub.js";
 
 export function registerWebSocketRoute(app: FastifyInstance, requests: IRequestRepository) {
   app.get(

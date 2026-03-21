@@ -4,20 +4,20 @@ import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import jwt from "@fastify/jwt";
 import websocket from "@fastify/websocket";
-import { initDb } from "./infrastructure/persistence/initDb.js";
-import { PostgresUserRepository } from "./infrastructure/persistence/postgresUserRepository.js";
-import { PostgresRequestRepository } from "./infrastructure/persistence/postgresRequestRepository.js";
-import { PostgresGeoService } from "./infrastructure/geo/postgresGeoService.js";
-import { BcryptPasswordHasher } from "./infrastructure/auth/bcryptPasswordHasher.js";
-import { RealtimeBroadcasterAdapter } from "./infrastructure/realtime/realtimeBroadcasterAdapter.js";
-import { registerAuthenticate } from "./presentation/http/registerAuthenticate.js";
+import { initDb } from "./infrastructure/persistence/init-db.js";
+import { PostgresUserRepository } from "./infrastructure/persistence/postgres-user-repository.js";
+import { PostgresRequestRepository } from "./infrastructure/persistence/postgres-request-repository.js";
+import { PostgresGeoService } from "./infrastructure/geo/postgres-geo-service.js";
+import { BcryptPasswordHasher } from "./infrastructure/auth/password-hasher.js";
+import { RealtimeBroadcasterAdapter } from "./infrastructure/realtime/realtime-broadcaster-adapter.js";
+import { registerAuthenticate } from "./presentation/http/register-authenticate.js";
 import { registerAuthRoutes } from "./presentation/http/routes/auth.js";
 import { registerMeRoutes } from "./presentation/http/routes/me.js";
 import { registerClientRoutes } from "./presentation/http/routes/client.js";
 import { registerProviderRoutes } from "./presentation/http/routes/provider.js";
 import { registerRequestRoutes } from "./presentation/http/routes/requests.js";
 import { registerProviderSearchRoutes } from "./presentation/http/routes/providers.js";
-import { registerWebSocketRoute } from "./presentation/websocket/registerWebSocket.js";
+import { registerWebSocketRoute } from "./presentation/websocket/register-web-socket.js";
 
 const app = Fastify({ logger: true });
 
