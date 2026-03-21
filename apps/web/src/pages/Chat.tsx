@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Send, Wrench, Star, Phone, MapPin, DollarSign, Check, X } from "lucide-react";
+import { ArrowLeft, Send, Wrench, Star, Phone, MapPin, DollarSign, Check, X, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,11 +19,12 @@ import {
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 
-type UiStatus = "negotiating" | "confirmed" | "cancelled" | "completed";
+type UiStatus = "waiting_provider" | "negotiating" | "confirmed" | "cancelled" | "completed";
 
 const getUiStatus = (status?: string): UiStatus => {
   switch (status) {
     case "open":
+      return "waiting_provider";
     case "accepted":
       return "negotiating";
     case "confirmed":
@@ -40,6 +41,13 @@ const getUiStatus = (status?: string): UiStatus => {
 
 const statusBanner = (status: UiStatus) => {
   switch (status) {
+    case "waiting_provider":
+      return {
+        bg: "bg-yellow-500/10 border-yellow-500/30",
+        text: "text-yellow-700 dark:text-yellow-400",
+        icon: Clock,
+        label: "Aguardando prestador",
+      };
     case "confirmed":
       return { bg: "bg-success/10 border-success/30", text: "text-success", icon: Check, label: "Servico confirmado" };
     case "cancelled":
@@ -47,7 +55,7 @@ const statusBanner = (status: UiStatus) => {
     case "completed":
       return { bg: "bg-accent/10 border-accent/30", text: "text-accent", icon: Star, label: "Servico finalizado" };
     default:
-      return { bg: "bg-warning/10 border-warning/30", text: "text-warning", icon: DollarSign, label: "Negociando valor" };
+      return { bg: "bg-sky-500/10 border-sky-500/30", text: "text-sky-700 dark:text-sky-400", icon: DollarSign, label: "Negociando valor" };
   }
 };
 
@@ -227,7 +235,7 @@ const Chat = () => {
   const providerConfirmed = Boolean(request.providerConfirmed);
   const canConfirm = uiStatus === "negotiating" && ((isClient && !clientConfirmed) || (!isClient && !providerConfirmed));
   const canComplete = !isClient && uiStatus === "confirmed";
-  const canCancel = uiStatus === "negotiating";
+  const canCancel = uiStatus === "negotiating" || uiStatus === "waiting_provider";
   const waitingOther = isClient ? clientConfirmed && !providerConfirmed : providerConfirmed && !clientConfirmed;
   const providerPhone = request.provider?.phone ?? "";
   const agreedValueText = request.agreedValue > 0 ? request.agreedValueLabel : "a combinar";
@@ -326,7 +334,7 @@ const Chat = () => {
         <div ref={messagesEnd} />
       </div>
 
-      {(uiStatus === "negotiating" || uiStatus === "confirmed") && (
+      {(uiStatus === "waiting_provider" || uiStatus === "negotiating" || uiStatus === "confirmed") && (
         <div className="bg-card border-t border-border p-4">
           <div className="container space-y-3">
             {canConfirm && (

@@ -14,6 +14,26 @@ import { ApiError, createRating, createServiceRequest, getClientHistory, getClie
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+
+/** Tailwind classes for request status chips (client request list). */
+function clientRequestStatusBadgeClass(status: string): string {
+  switch (status) {
+    case "open":
+      return "bg-yellow-500/15 text-yellow-800 border-yellow-500/25 dark:bg-yellow-500/20 dark:text-yellow-200 dark:border-yellow-500/35";
+    case "accepted":
+      return "bg-sky-500/15 text-sky-800 border-sky-500/25 dark:bg-sky-500/20 dark:text-sky-200 dark:border-sky-500/35";
+    case "confirmed":
+      return "bg-emerald-500/15 text-emerald-800 border-emerald-500/25 dark:bg-emerald-500/20 dark:text-emerald-200 dark:border-emerald-500/35";
+    case "completed":
+      return "bg-muted/80 text-muted-foreground border-border";
+    case "cancelled":
+    case "rejected":
+      return "bg-destructive/15 text-destructive border-destructive/25 dark:bg-destructive/20";
+    default:
+      return "bg-secondary text-secondary-foreground";
+  }
+}
 
 const services = [
   { id: "eletrica", icon: Zap, label: "Elétrica", desc: "Tomadas, fiação, disjuntores", color: "from-yellow-400 to-amber-500" },
@@ -312,7 +332,10 @@ const ClientHome = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                           <p className="font-semibold text-card-foreground">{r.provider}</p>
-                          <Badge variant="secondary" className="font-normal">
+                          <Badge
+                            variant="secondary"
+                            className={cn("font-normal border", clientRequestStatusBadgeClass(r.status))}
+                          >
                             {r.statusLabel}
                           </Badge>
                         </div>
@@ -345,7 +368,10 @@ const ClientHome = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2 mb-1">
                         <p className="font-semibold text-card-foreground">{r.provider}</p>
-                        <Badge variant="outline" className="font-normal">
+                        <Badge
+                          variant="outline"
+                          className={cn("font-normal border", clientRequestStatusBadgeClass(r.status))}
+                        >
                           {r.statusLabel}
                         </Badge>
                       </div>
