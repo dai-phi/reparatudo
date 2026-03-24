@@ -7,6 +7,7 @@ import { Wrench, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { ApiError, registerClient, setAuth } from "@/lib/api";
+import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
 const ClientRegister = () => {
   const navigate = useNavigate();
@@ -58,10 +59,10 @@ const ClientRegister = () => {
         passwordConfirm: form.passwordConfirm,
       });
       setAuth(auth);
-      toast.success("Cadastro realizado!");
+      toast.success(UI_MESSAGES.auth.clientRegisterSuccess);
       navigate("/client/home");
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : "Não foi possível concluir o cadastro";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.auth.register;
       toast.error(message);
     } finally {
       setLoading(false);

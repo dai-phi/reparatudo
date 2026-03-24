@@ -18,6 +18,7 @@ import {
 } from "@/lib/api";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
+import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
 type UiStatus = "waiting_provider" | "negotiating" | "confirmed" | "cancelled" | "completed";
 
@@ -49,11 +50,11 @@ const statusBanner = (status: UiStatus) => {
         label: "Aguardando prestador",
       };
     case "confirmed":
-      return { bg: "bg-success/10 border-success/30", text: "text-success", icon: Check, label: "Servico confirmado" };
+      return { bg: "bg-success/10 border-success/30", text: "text-success", icon: Check, label: "Serviço confirmado" };
     case "cancelled":
-      return { bg: "bg-destructive/10 border-destructive/30", text: "text-destructive", icon: X, label: "Servico cancelado" };
+      return { bg: "bg-destructive/10 border-destructive/30", text: "text-destructive", icon: X, label: "Serviço cancelado" };
     case "completed":
-      return { bg: "bg-accent/10 border-accent/30", text: "text-accent", icon: Star, label: "Servico finalizado" };
+      return { bg: "bg-accent/10 border-accent/30", text: "text-accent", icon: Star, label: "Serviço finalizado" };
     default:
       return { bg: "bg-sky-500/10 border-sky-500/30", text: "text-sky-700 dark:text-sky-400", icon: DollarSign, label: "Negociando valor" };
   }
@@ -107,7 +108,7 @@ const Chat = () => {
       addMessageToCache(message);
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel enviar a mensagem";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.chat.sendMessage;
       toast.error(message);
     },
   });
@@ -120,10 +121,10 @@ const Chat = () => {
         if (!old) return [data.message];
         return [...old, data.message];
       });
-      toast.success("Servico confirmado!");
+      toast.success(UI_MESSAGES.request.confirmedService);
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel confirmar o servico";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.chat.confirmService;
       toast.error(message);
     },
   });
@@ -136,10 +137,10 @@ const Chat = () => {
         if (!old) return [data.message];
         return [...old, data.message];
       });
-      toast("Servico cancelado");
+      toast.success(UI_MESSAGES.chat.serviceCancelled);
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel cancelar o servico";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.chat.cancelService;
       toast.error(message);
     },
   });
@@ -152,11 +153,11 @@ const Chat = () => {
         if (!old) return [data.message];
         return [...old, data.message];
       });
-      toast.success("Servico finalizado!");
+      toast.success(UI_MESSAGES.chat.serviceCompleted);
       navigate("/provider/dashboard");
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel finalizar o servico";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.chat.completeService;
       toast.error(message);
     },
   });
@@ -362,7 +363,7 @@ const Chat = () => {
                     onClick={() => confirmMutation.mutate(isClient ? agreedValue : undefined)}
                     disabled={confirmMutation.isPending}
                   >
-                    <Check className="w-4 h-4" /> Confirmar Servico
+                    <Check className="w-4 h-4" /> Confirmar Serviço
                   </Button>
                   {canCancel && (
                     <Button variant="outline" size="sm" className="flex-1" onClick={() => cancelMutation.mutate()} disabled={cancelMutation.isPending}>
@@ -374,13 +375,13 @@ const Chat = () => {
             )}
 
             {waitingOther && (
-              <div className="text-sm text-muted-foreground">Aguardando confirmacao da outra parte.</div>
+              <div className="text-sm text-muted-foreground">Aguardando confirmação da outra parte.</div>
             )}
 
             {canComplete && (
               <div className="flex gap-2">
                 <Button variant="hero" size="sm" className="flex-1" onClick={() => completeMutation.mutate()} disabled={completeMutation.isPending}>
-                  <Check className="w-4 h-4" /> Finalizar Servico
+                  <Check className="w-4 h-4" /> Finalizar Serviço
                 </Button>
               </div>
             )}
@@ -406,8 +407,8 @@ const Chat = () => {
           <div className="container text-center space-y-3">
             <p className="text-sm text-muted-foreground">
               {uiStatus === "completed"
-                ? "Servico finalizado. Esta conversa e apenas para consulta."
-                : "Servico cancelado. Apenas visualizacao."}
+                ? "Serviço finalizado. Esta conversa e apenas para consulta."
+                : "Serviço cancelado. Apenas visualização."}
             </p>
             <Button variant="hero" size="sm" onClick={() => navigate(backPath)}>
               Voltar ao Inicio

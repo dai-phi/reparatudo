@@ -8,6 +8,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ApiError, logout, setStoredUser, updateMe } from "@/lib/api";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
+import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
 const ClientPerfil = () => {
   const navigate = useNavigate();
@@ -51,11 +52,11 @@ const ClientPerfil = () => {
     mutationFn: updateMe,
     onSuccess: (user) => {
       setStoredUser(user);
-      toast.success("Perfil atualizado!");
+      toast.success(UI_MESSAGES.profile.updated);
       queryClient.invalidateQueries({ queryKey: ["me"] });
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel atualizar o perfil";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.profile.update;
       toast.error(message);
     },
   });

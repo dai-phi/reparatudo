@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { ApiError, login, setAuth } from "@/lib/api";
 import { useAuthUser } from "@/hooks/useAuth";
+import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -26,10 +27,10 @@ const Login = () => {
     try {
       const auth = await login({ email: form.email.trim(), password: form.password });
       setAuth(auth);
-      toast.success("Login realizado!");
+      toast.success(UI_MESSAGES.auth.loginSuccess);
       navigate(auth.user.role === "provider" ? "/provider/dashboard" : "/client/home");
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel entrar";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.auth.login;
       toast.error(message);
     } finally {
       setLoading(false);

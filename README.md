@@ -87,7 +87,7 @@ Autenticacao atual usa e-mail + senha.
 
 Observacoes:
 - CEP do cliente e do prestador sao usados para validar raio (usa BrasilAPI/Nominatim para coordenadas).
-- O chat abre apos o prestador aceitar e ambos confirmarem o servico.
+- O chat abre apos o prestador aceitar e ambos confirmarem o serviço.
 
 ## How can I deploy this project?
 

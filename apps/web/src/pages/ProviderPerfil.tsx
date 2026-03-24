@@ -22,6 +22,7 @@ import {
 } from "@/lib/api";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
 function paymentMethodLabel(f: ProviderPaymentMethod) {
   switch (f) {
@@ -101,11 +102,11 @@ const ProviderPerfil = () => {
     mutationFn: updateMe,
     onSuccess: (user) => {
       setStoredUser(user);
-      toast.success("Perfil atualizado!");
+      toast.success(UI_MESSAGES.profile.updated);
       queryClient.invalidateQueries({ queryKey: ["me"] });
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel atualizar o perfil";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.profile.update;
       toast.error(message);
     },
   });
@@ -118,14 +119,14 @@ const ProviderPerfil = () => {
           payMethod === "cartao_credito" || payMethod === "cartao_debito" ? cardLast4.replace(/\D/g, "").slice(0, 4) : undefined,
       }),
     onSuccess: (data) => {
-      toast.success("Pagamento registrado com sucesso!");
+      toast.success(UI_MESSAGES.billing.paymentRegistered);
       setLastPixPayload(data.pixCopyPaste ?? null);
       queryClient.invalidateQueries({ queryKey: ["providerBillingSummary"] });
       queryClient.invalidateQueries({ queryKey: ["providerBillingPayments"] });
       setCardLast4("");
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel concluir o pagamento";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.billing.pay;
       toast.error(message);
     },
   });
@@ -149,9 +150,9 @@ const ProviderPerfil = () => {
   const copyPix = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success("Código copiado!");
+      toast.success(UI_MESSAGES.billing.pixCodeCopied);
     } catch {
-      toast.error("Nao foi possivel copiar");
+      toast.error(UI_ERRORS.billing.copyPix);
     }
   };
 

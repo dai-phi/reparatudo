@@ -7,6 +7,7 @@ import { Wrench, Zap, Droplets, PaintBucket, Hammer, ArrowLeft, CheckCircle2 } f
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { ApiError, registerProvider, setAuth } from "@/lib/api";
+import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
 const serviceOptions = [
   { id: "eletrica", icon: Zap, label: "Elétrica" },
@@ -78,10 +79,10 @@ const ProviderRegister = () => {
         passwordConfirm: form.passwordConfirm,
       });
       setAuth(auth);
-      toast.success("Cadastro realizado com sucesso!");
+      toast.success(UI_MESSAGES.auth.providerRegisterSuccess);
       navigate("/provider/dashboard");
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : "Não foi possível concluir o cadastro";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.auth.register;
       toast.error(message);
     } finally {
       setLoading(false);

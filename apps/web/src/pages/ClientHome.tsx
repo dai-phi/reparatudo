@@ -15,6 +15,7 @@ import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
 /** Tailwind classes for request status chips (client request list). */
 function clientRequestStatusBadgeClass(status: string): string {
@@ -101,7 +102,7 @@ const ClientHome = () => {
       setActiveTab("history");
       setRatingServiceId(state.rateRequestId);
       queryClient.invalidateQueries({ queryKey: ["clientHistory"] });
-      toast.success("Servico finalizado! Avalie o prestador abaixo (opcional).");
+      toast.success(UI_MESSAGES.request.completedAndRatePrompt);
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, location.pathname, navigate, queryClient]);
@@ -132,10 +133,10 @@ const ClientHome = () => {
     onSuccess: (data) => {
       setPendingRequestId(data.requestId);
       queryClient.invalidateQueries({ queryKey: ["clientRequests"] });
-      toast.success("Pedido enviado! Aguardando aceite do prestador.");
+      toast.success(UI_MESSAGES.request.createdAndWaitingProvider);
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel criar o pedido";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.request.create;
       toast.error(message);
     },
   });
@@ -143,14 +144,14 @@ const ClientHome = () => {
   const ratingMutation = useMutation({
     mutationFn: createRating,
     onSuccess: () => {
-      toast.success("Avaliacao enviada! Obrigado.");
+      toast.success(UI_MESSAGES.rating.submitted);
       setRatingServiceId(null);
       setTempRating(0);
       setTempReview("");
       queryClient.invalidateQueries({ queryKey: ["clientHistory"] });
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel enviar a avaliacao";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.rating.submit;
       toast.error(message);
     },
   });
@@ -175,7 +176,7 @@ const ClientHome = () => {
         navigate(`/chat/${pendingRequestId}`);
       }
       if (event.type === "request.updated" && (event.payload?.status === "rejected" || event.payload?.status === "cancelled")) {
-        toast.error("Prestador recusou ou cancelou o pedido.");
+        toast.error(UI_MESSAGES.request.providerRejectedOrCancelled);
         setPendingRequestId(null);
       }
     },
@@ -195,7 +196,7 @@ const ClientHome = () => {
       navigate(`/chat/${pendingRequestId}`);
     }
     if (status === "rejected" || status === "cancelled") {
-      toast.error("Prestador recusou ou cancelou o pedido.");
+      toast.error(UI_MESSAGES.request.providerRejectedOrCancelled);
       setPendingRequestId(null);
     }
   }, [pendingRequestId, pendingRequestQuery.data, navigate]);
@@ -207,7 +208,7 @@ const ClientHome = () => {
 
   const handleRequest = (providerId: string) => {
     if (!selectedService) {
-      toast.error("Selecione um servico");
+      toast.error(UI_MESSAGES.validation.selectService);
       return;
     }
     requestMutation.mutate({
@@ -219,7 +220,7 @@ const ClientHome = () => {
 
   const submitRating = (id: string) => {
     if (tempRating === 0) {
-      toast.error("Selecione uma nota");
+      toast.error(UI_MESSAGES.validation.selectRating);
       return;
     }
     ratingMutation.mutate({ requestId: id, rating: tempRating, review: tempReview.trim() || undefined });
@@ -548,7 +549,7 @@ const ClientHome = () => {
             ) : historyQuery.isError ? (
               <div className="text-center py-12 text-muted-foreground">Nao foi possivel carregar o historico.</div>
             ) : completedServices.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">Nenhum servico finalizado ainda.</div>
+              <div className="text-center py-12 text-muted-foreground">Nenhum serviço finalizado ainda.</div>
             ) : (
               completedServices.map((svc) => (
                 <motion.div

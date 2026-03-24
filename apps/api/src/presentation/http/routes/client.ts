@@ -94,20 +94,20 @@ export async function registerClientRoutes(
     const target = await clients.findRequestForRating(parsed.data.requestId);
 
     if (!target || target.client_id !== request.user.sub) {
-      return reply.code(404).send({ message: "Servico nao encontrado" });
+      return reply.code(404).send({ message: "Serviço nao encontrado" });
     }
 
     if (target.status !== "completed") {
-      return reply.code(400).send({ message: "Servico ainda nao finalizado" });
+      return reply.code(400).send({ message: "Serviço ainda nao finalizado" });
     }
 
     if (!target.provider_id) {
-      return reply.code(400).send({ message: "Prestador nao definido" });
+      return reply.code(400).send({ message: "Prestador não definido" });
     }
 
     const already = await clients.hasRating(target.id);
     if (already) {
-      return reply.code(409).send({ message: "Servico ja avaliado" });
+      return reply.code(409).send({ message: "Serviço já avaliado" });
     }
 
     await clients.insertRating({

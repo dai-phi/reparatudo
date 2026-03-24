@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { ApiError, RequestSummary, acceptRequest, cancelRequest, completeRequest, confirmRequest, getProviderHistory, getProviderRequests, getProviderStats, logout, rejectRequest } from "@/lib/api";
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
+import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
 const isInService = (status?: string) => status === "confirmed";
 
@@ -77,7 +78,7 @@ const ProviderDashboard = () => {
       const filtered = (old ?? []).filter((item) => item.id !== event.payload.id);
       return [event.payload, ...filtered];
     });
-    toast.success(`Novo pedido de ${event.payload.client}`);
+    toast.success(UI_MESSAGES.request.newRequestFrom(event.payload.client));
     setHasNewRequest(true);
   }, [queryClient]);
 
@@ -89,14 +90,14 @@ const ProviderDashboard = () => {
   const acceptMutation = useMutation({
     mutationFn: acceptRequest,
     onSuccess: (_data, requestId) => {
-      toast.success("Pedido aceito! Chat aberto com o cliente.");
+      toast.success(UI_MESSAGES.request.acceptedAndChatOpened);
       queryClient.invalidateQueries({ queryKey: ["providerRequests"] });
       if (requestId) {
         navigate(`/chat/${requestId}`);
       }
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel aceitar o pedido";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.request.accept;
       toast.error(message);
     },
   });
@@ -104,11 +105,11 @@ const ProviderDashboard = () => {
   const rejectMutation = useMutation({
     mutationFn: rejectRequest,
     onSuccess: () => {
-      toast("Pedido recusado");
+      toast.success(UI_MESSAGES.request.rejected);
       queryClient.invalidateQueries({ queryKey: ["providerRequests"] });
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel recusar o pedido";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.request.reject;
       toast.error(message);
     },
   });
@@ -116,14 +117,14 @@ const ProviderDashboard = () => {
   const completeMutation = useMutation({
     mutationFn: completeRequest,
     onSuccess: () => {
-      toast.success("Atendimento finalizado com sucesso.");
+      toast.success(UI_MESSAGES.request.completed);
       queryClient.invalidateQueries({ queryKey: ["providerRequests"] });
       queryClient.invalidateQueries({ queryKey: ["providerHistory"] });
       setFinishDialogOpen(false);
       setSelectedRequestId(null);
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel finalizar o atendimento";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.request.complete;
       toast.error(message);
     },
   });
@@ -131,14 +132,14 @@ const ProviderDashboard = () => {
   const cancelMutation = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason?: string }) => cancelRequest(id, reason),
     onSuccess: () => {
-      toast("Atendimento cancelado");
+      toast.success(UI_MESSAGES.request.cancelled);
       queryClient.invalidateQueries({ queryKey: ["providerRequests"] });
       setCancelDialogOpen(false);
       setCancelReason("");
       setSelectedRequestId(null);
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel cancelar o atendimento";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.request.cancel;
       toast.error(message);
     },
   });
@@ -146,11 +147,11 @@ const ProviderDashboard = () => {
   const confirmServiceMutation = useMutation({
     mutationFn: (id: string) => confirmRequest(id),
     onSuccess: () => {
-      toast.success("Servico confirmado.");
+      toast.success(UI_MESSAGES.request.confirmedService);
       queryClient.invalidateQueries({ queryKey: ["providerRequests"] });
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Não foi possível confirmar o serviço";
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.request.confirm;
       toast.error(message);
     },
   });

@@ -311,10 +311,10 @@ export async function confirmRequest(
   const agreedValueLabel = formattedRequest.agreedValueLabel || "a combinar";
 
   const messageText = statusChanged
-    ? `✅ Servico confirmado! Valor acordado: ${agreedValueLabel}.`
+    ? `✅ Serviço confirmado! Valor acordado: ${agreedValueLabel}.`
     : params.role === "client"
-      ? "✅ Cliente confirmou o servico. Aguardando prestador."
-      : "✅ Prestador confirmou o servico. Aguardando cliente.";
+      ? "✅ Cliente confirmou o serviço. Aguardando prestador."
+      : "✅ Prestador confirmou o serviço. Aguardando cliente.";
   const messageId = randomUUID();
 
   await deps.requests.insertMessage({
@@ -361,7 +361,7 @@ export async function cancelRequest(
 > {
   const target = await deps.requests.ensureParticipant(params.requestId, params.userId, params.role);
   if (!target) {
-    return { status: 404, message: "Pedido nao encontrado" };
+    return { status: 404, message: "Pedido não encontrado" };
   }
 
   const now = new Date().toISOString();
@@ -369,8 +369,8 @@ export async function cancelRequest(
   await deps.requests.updateCancel({ requestId: target.id, now, reason: reasonText });
 
   const messageText = reasonText
-    ? `❌ Servico cancelado pelo ${params.role === "client" ? "cliente" : "prestador"}. Motivo: ${reasonText}`
-    : `❌ Servico cancelado pelo ${params.role === "client" ? "cliente" : "prestador"}.`;
+    ? `❌ Serviço cancelado pelo ${params.role === "client" ? "cliente" : "prestador"}. Motivo: ${reasonText}`
+    : `❌ Serviço cancelado pelo ${params.role === "client" ? "cliente" : "prestador"}.`;
   const messageId = randomUUID();
 
   await deps.requests.insertMessage({
@@ -439,7 +439,7 @@ export async function completeRequest(
     });
   }
 
-  const messageText = "🎉 Servico finalizado! Obrigado por usar o Repara Tudo!";
+  const messageText = "🎉 Serviço finalizado! Obrigado por usar o Repara Tudo!";
   const messageId = randomUUID();
 
   await deps.requests.insertMessage({
