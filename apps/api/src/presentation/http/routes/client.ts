@@ -4,7 +4,7 @@ import { z } from "zod";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
 import { PostgresClientRepository } from "../../../infrastructure/persistence/repository/postgres-client-repository.js";
-import { StatusEnum } from "../../../domain/value-objects/status-enum.js";
+import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
 
 const ratingSchema = z.object({
   requestId: z.string().min(1),
@@ -15,7 +15,7 @@ const ratingSchema = z.object({
 function statusMeta(status: string): { label: string; chatOpen: boolean } {
   switch (status) {
     case StatusEnum.OPEN:
-      return { label: "Aguardando prestador", chatOpen: true };
+      return { label: RequestStatusLabel.WAITING_PROVIDER, chatOpen: true };
     case StatusEnum.ACCEPTED:
       return { label: "Em negociação", chatOpen: true };
     case StatusEnum.CONFIRMED:
