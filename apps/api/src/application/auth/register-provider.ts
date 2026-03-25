@@ -8,7 +8,7 @@ import type { AuthFailure, AuthSuccess } from "./register-client.js";
 import { normalizePhoneDigits } from "../utils/phone-digits.js";
 import { lookupViaCep } from "../utils/viacep-lookup.js";
 
-export type RegisterProviderInput = {
+export type RegisterProviderFormInput = {
   name: string;
   email: string;
   phone: string;
@@ -24,13 +24,23 @@ export type RegisterProviderInput = {
   password: string;
 };
 
+/** Mídia já enviada ao Cloudinary antes do insert (cadastro multipart). */
+export type ProviderRegistrationMedia = {
+  userId: string;
+  photoUrl?: string | null;
+  photoStorageKey?: string | null;
+  verificationDocumentUrl: string;
+  verificationDocumentStorageKey: string;
+};
+
 export async function registerProvider(
   deps: {
     users: IUserRepository;
     geo: IGeoService;
     passwordHasher: IPasswordHasher;
   },
-  input: RegisterProviderInput
+  input: RegisterProviderFormInput,
+  media?: ProviderRegistrationMedia
 ): Promise<AuthSuccess | AuthFailure> {
   const email = input.email.toLowerCase();
   const phone = input.phone.trim();
@@ -69,7 +79,7 @@ export async function registerProvider(
     };
   }
 
-  const userId = randomUUID();
+  const userId = media?.userId ?? randomUUID();
   const passwordHash = await deps.passwordHasher.hash(input.password);
 
   await deps.users.insertProvider({
@@ -85,6 +95,10 @@ export async function registerProvider(
     workLng: coords.lng,
     workAddress: workAddressFull,
     passwordHash,
+    photoUrl: media?.photoUrl ?? null,
+    photoStorageKey: media?.photoStorageKey ?? null,
+    verificationDocumentUrl: media?.verificationDocumentUrl ?? null,
+    verificationDocumentStorageKey: media?.verificationDocumentStorageKey ?? null,
     createdAt: now,
     updatedAt: now,
   });
@@ -102,7 +116,8 @@ export async function registerProvider(
     workLat: coords.lat,
     workLng: coords.lng,
     workAddress: workAddressFull,
-    photoUrl: null,
+    photoUrl: media?.photoUrl ?? null,
+    verificationDocumentUrl: media?.verificationDocumentUrl ?? null,
     address: null,
     cpf: input.cpf?.trim() || null,
     radiusKm: input.radiusKm,

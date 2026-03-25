@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,11 +12,13 @@ import { toast } from "sonner";
 import {
   ApiError,
   createProviderBillingPayment,
+  deleteMyProfilePhoto,
   getProviderBillingPayments,
   getProviderBillingSummary,
   logout,
   setStoredUser,
   updateMe,
+  uploadMyProfilePhoto,
   type ProviderPaymentMethod,
   type ProviderPaymentStatus,
 } from "@/lib/api";
@@ -25,6 +27,8 @@ import { cn } from "@/lib/utils";
 import { hasFullName } from "@/lib/person-name";
 import { isValidBrazilPhone } from "@/lib/phone";
 import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
+
+const ACCEPT_PROFILE_IMAGES = "image/jpeg,image/png,image/webp";
 
 function paymentMethodLabel(f: ProviderPaymentMethod) {
   switch (f) {
@@ -63,8 +67,8 @@ const ProviderPerfil = () => {
     radiusKm: "",
     workCep: "",
     workAddress: "",
-    photoUrl: "",
   });
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null);
   const [payMethod, setPayMethod] = useState<ProviderPaymentMethod>("pix");
   const [cardLast4, setCardLast4] = useState("");
   const [lastPixPayload, setLastPixPayload] = useState<string | null>(null);
@@ -96,7 +100,6 @@ const ProviderPerfil = () => {
         radiusKm: me.radiusKm ? String(me.radiusKm) : "10",
         workCep: me.workCep ?? "",
         workAddress: me.workAddress ?? "",
-        photoUrl: me.photoUrl ?? "",
       });
     }
   }, [me]);
@@ -111,6 +114,32 @@ const ProviderPerfil = () => {
     },
     onError: (error: unknown) => {
       const message = error instanceof ApiError ? error.message : UI_ERRORS.profile.update;
+      toast.error(message);
+    },
+  });
+
+  const photoUploadMutation = useMutation({
+    mutationFn: uploadMyProfilePhoto,
+    onSuccess: (user) => {
+      setStoredUser(user);
+      queryClient.invalidateQueries({ queryKey: ["me"] });
+      toast.success("Foto de perfil atualizada");
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : "Nao foi possivel enviar a foto";
+      toast.error(message);
+    },
+  });
+
+  const photoDeleteMutation = useMutation({
+    mutationFn: deleteMyProfilePhoto,
+    onSuccess: (user) => {
+      setStoredUser(user);
+      queryClient.invalidateQueries({ queryKey: ["me"] });
+      toast.success("Foto de perfil removida");
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : "Nao foi possivel remover a foto";
       toast.error(message);
     },
   });
@@ -159,9 +188,10 @@ const ProviderPerfil = () => {
       radiusKm: profileForm.radiusKm ? Number(profileForm.radiusKm) : undefined,
       workCep: profileForm.workCep.replace(/\D/g, "") || undefined,
       workAddress: profileForm.workAddress.trim() || undefined,
-      photoUrl: profileForm.photoUrl.trim() || undefined,
     });
   };
+
+  const avatarUrl = me?.photoUrl ?? null;
 
   const copyPix = async (text: string) => {
     try {
@@ -236,20 +266,61 @@ const ProviderPerfil = () => {
               <div className="rounded-xl bg-card shadow-card p-4 sm:p-6 space-y-4 sm:max-w-2xl">
                 <h2 className="font-display text-xl font-semibold text-card-foreground">Meu perfil</h2>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
-                  {profileForm.photoUrl ? (
+                  {avatarUrl ? (
                     <img
-                      src={profileForm.photoUrl}
-                      alt="Foto"
-                      className="w-24 h-24 sm:w-16 sm:h-16 rounded-full object-cover mx-auto sm:mx-0"
+                      src={avatarUrl}
+                      alt=""
+                      className="w-24 h-24 sm:w-16 sm:h-16 rounded-full object-cover mx-auto sm:mx-0 ring-2 ring-border"
                     />
                   ) : (
-                    <div className="w-24 h-24 sm:w-16 sm:h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto sm:mx-0">
-                      <User className="w-10 h-10 sm:w-8 sm:h-8 text-accent" />
+                    <div
+                      className="w-24 h-24 sm:w-16 sm:h-16 rounded-full border-2 border-dashed border-muted-foreground/40 bg-muted/30 flex flex-col items-center justify-center gap-1 mx-auto sm:mx-0 text-muted-foreground"
+                      aria-hidden
+                    >
+                      <User className="w-8 h-8 sm:w-7 sm:h-7 opacity-60" />
+                      <span className="text-[10px] sm:text-[9px] leading-tight text-center px-1">Sem foto</span>
                     </div>
                   )}
-                  <div className="text-center sm:text-left">
-                    <p className="font-bold text-card-foreground">{me?.name ?? "Profissional"}</p>
-                    <p className="text-sm text-muted-foreground break-all">{me?.email ?? "email@exemplo.com"}</p>
+                  <div className="text-center sm:text-left flex-1 space-y-3">
+                    <div>
+                      <p className="font-bold text-card-foreground">{me?.name ?? "Profissional"}</p>
+                      <p className="text-sm text-muted-foreground break-all">{me?.email ?? "email@exemplo.com"}</p>
+                    </div>
+                    <div className="flex flex-wrap justify-center sm:justify-start gap-2">
+                      <input
+                        ref={profilePhotoInputRef}
+                        type="file"
+                        accept={ACCEPT_PROFILE_IMAGES}
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          e.target.value = "";
+                          if (f) photoUploadMutation.mutate(f);
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => profilePhotoInputRef.current?.click()}
+                        disabled={photoUploadMutation.isPending || photoDeleteMutation.isPending}
+                      >
+                        {photoUploadMutation.isPending ? "Enviando..." : avatarUrl ? "Trocar foto" : "Enviar foto"}
+                      </Button>
+                      {avatarUrl ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => photoDeleteMutation.mutate()}
+                          disabled={photoUploadMutation.isPending || photoDeleteMutation.isPending}
+                        >
+                          {photoDeleteMutation.isPending ? "Removendo..." : "Remover foto"}
+                        </Button>
+                      ) : null}
+                    </div>
+                    <p className="text-xs text-muted-foreground">JPEG, PNG ou WebP. Máximo 5 MB.</p>
                   </div>
                 </div>
                 <div className="space-y-4">
@@ -280,14 +351,6 @@ const ProviderPerfil = () => {
                     />
                   </div>
                   <div>
-                    <Label>Endereço do local de trabalho</Label>
-                    <Input
-                      placeholder="Rua, número, bairro, cidade, UF"
-                      value={profileForm.workAddress}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, workAddress: e.target.value }))}
-                    />
-                  </div>
-                  <div>
                     <Label>CEP do local de trabalho</Label>
                     <Input
                       placeholder="00000-000"
@@ -296,13 +359,13 @@ const ProviderPerfil = () => {
                     />
                   </div>
                   <div>
-                    <Label>Foto (URL)</Label>
+                    <Label>Logradouro e número</Label>
                     <Input
-                      placeholder="https://..."
-                      value={profileForm.photoUrl}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, photoUrl: e.target.value }))}
+                      placeholder="Rua, número, bairro, cidade, UF"
+                      value={profileForm.workAddress}
+                      onChange={(e) => setProfileForm((prev) => ({ ...prev, workAddress: e.target.value }))}
                     />
-                    <p className="text-xs text-muted-foreground mt-1">Cole o link de uma imagem para sua foto de perfil</p>
+                    <p className="text-xs text-muted-foreground mt-1">Inclua o número do imóvel.</p>
                   </div>
                   <Button variant="hero" className="w-full sm:w-auto" onClick={handleSaveProfile} disabled={updateMutation.isPending}>
                     Salvar alterações

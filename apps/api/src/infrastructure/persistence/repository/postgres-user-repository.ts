@@ -21,6 +21,8 @@ function mapUserRow(row: Record<string, unknown>): UserRecord {
     workLng: row.work_lng != null ? Number(row.work_lng) : null,
     workAddress: row.work_address != null ? String(row.work_address) : null,
     photoUrl: row.photo_url != null ? String(row.photo_url) : null,
+    verificationDocumentUrl:
+      row.verification_document_url != null ? String(row.verification_document_url) : null,
     address: row.address != null ? String(row.address) : null,
     cpf: row.cpf != null ? String(row.cpf) : null,
     radiusKm: row.radius_km != null ? Number(row.radius_km) : null,
@@ -80,8 +82,9 @@ export class PostgresUserRepository implements IUserRepository {
 
   async insertProvider(input: RegisterProviderInput): Promise<void> {
     await this.db.query(
-      `INSERT INTO users (id, role, name, email, phone, cpf, radius_km, services, work_cep, work_lat, work_lng, work_address, password_hash, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+      `INSERT INTO users (id, role, name, email, phone, cpf, radius_km, services, work_cep, work_lat, work_lng, work_address, password_hash,
+        photo_url, photo_storage_key, verification_document_url, verification_document_storage_key, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
       [
         input.id,
         "provider",
@@ -96,6 +99,10 @@ export class PostgresUserRepository implements IUserRepository {
         input.workLng,
         input.workAddress,
         input.passwordHash,
+        input.photoUrl ?? null,
+        input.photoStorageKey ?? null,
+        input.verificationDocumentUrl ?? null,
+        input.verificationDocumentStorageKey ?? null,
         input.createdAt,
         input.updatedAt,
       ]

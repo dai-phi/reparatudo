@@ -113,6 +113,33 @@ export async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_service_lng DOUBLE PRECISION;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_service_at TIMESTAMPTZ;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS work_address TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_storage_key TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_document_url TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_document_storage_key TEXT;
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'photo_cloudinary_public_id'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'photo_storage_key'
+      ) THEN
+        ALTER TABLE users RENAME COLUMN photo_cloudinary_public_id TO photo_storage_key;
+      END IF;
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'verification_document_public_id'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'verification_document_storage_key'
+      ) THEN
+        ALTER TABLE users RENAME COLUMN verification_document_public_id TO verification_document_storage_key;
+      END IF;
+    END $$;
   `);
 
   await pool.query(`

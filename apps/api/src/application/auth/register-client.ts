@@ -99,6 +99,7 @@ export async function registerClient(
     workLng: null,
     workAddress: null,
     photoUrl: null,
+    verificationDocumentUrl: null,
     address: fullAddress,
     cpf: null,
     radiusKm: null,
