@@ -1,0 +1,69 @@
+---
+description: Monorepo — Vite/React web app (`apps/web`), stack, folder map, boundaries, and language alignment with `apps/api`
+globs: apps/web/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# `apps/web` — conventions
+
+## Stack and where to put new code
+
+- **Vite 5**, **React 18**, **TypeScript**, **ESM** (`"type": "module"`).
+- **Routing**: `react-router-dom` — route table and providers in `App.tsx`; new screens wired there.
+- **Server/async state**: **TanStack Query** — use `src/lib/queryClient.ts` and the provider in `App.tsx`.
+- **HTTP**: central client in `src/lib/api.ts`; keep API calls there or in thin wrappers; avoid scattering `fetch` in pages.
+- **Forms**: **react-hook-form** + **@hookform/resolvers** for schema-style validation. Zod is not a direct dependency yet; when it is added, prefer resolvers next to the form or under a small `schemas/` module.
+- **UI**: **Tailwind CSS** + shadcn-style primitives under `src/components/ui/` (Radix-based); use the **`cn`** helper from `src/lib/utils.ts`.
+- **Real-time**: `src/lib/websocket.ts` — WebSocket connection helpers live here.
+- **Testing**: **Vitest** + Testing Library — setup and shared test utilities under `src/test/`.
+
+## Folder structure (`apps/web/src`)
+
+| Area | Path | Role |
+| --- | --- | --- |
+| Routes / screens | `pages/` | Page components wired in `App.tsx`; route-level composition stays here. |
+| App-specific UI | `components/` (e.g. `NavLink.tsx`) | Shared non-primitive components; avoid bloating `pages/`. |
+| Design system / primitives | `components/ui/` | shadcn/Radix building blocks; treat as **vendor-like** — change sparingly, prefer wrapping. |
+| Hooks | `hooks/` | Reusable stateful logic (`useAuth`, queries, subscriptions). |
+| Infra / clients | `lib/` | API client, query client, websocket, `utils`, env-safe base URLs — **no** React tree or JSX. |
+| User-facing copy (PT) | `value-objects/messages.ts` | Centralized Portuguese strings for the UI. |
+
+## Architecture and clean boundaries (frontend)
+
+- **Dependency direction** (React-appropriate; not a copy of backend hexagonal layers):
+
+```mermaid
+flowchart LR
+  pages --> components
+  pages --> hooks
+  components --> hooks
+  hooks --> lib
+  pages --> lib
+```
+
+- **`pages/`**: orchestration, routing, layout; **no** low-level HTTP/WebSocket details — delegate to hooks and `lib/`.
+- **`hooks/`**: auth, queries/mutations, subscriptions; depend on `lib/`, not on specific page components.
+- **`lib/`**: API, query client, websocket, env-safe URLs — **no** JSX.
+- **`components/ui/`**: presentational primitives; compose from pages/features rather than forking primitives for one screen.
+- **Colocation**: when a screen grows, optional feature-specific subfolders under `components/` or next to the page — pragmatic scale-up, not a mandatory Feature-Sliced Design migration.
+
+**Default pattern (SPA)**: route-based `pages/` + TanStack Query for server state, local state (`useState` / `useReducer`) for UI-only concerns, composition + custom hooks instead of fat components, and a separate design-system layer (`components/ui/`) from app components (`components/`, `pages/`).
+
+## Language and copy (code vs user)
+
+| Scope | Language | Notes |
+| --- | --- | --- |
+| Source code (`apps/api`, `apps/web`) | **English** | Module, type, function, and variable names; commits; comments when needed, in English. |
+| Database | **English** | Table/column names, migrations, constraints. |
+| Browser UI (`apps/web`) | **Portuguese** | Page copy, buttons, labels, empty states, validation messages shown in the UI (e.g. `pages/`, `components/`, `value-objects/messages.ts`). |
+| API JSON (messages exposed to clients) | **Portuguese** | Errors and response messages aligned with the PT product; clients may display them as-is. |
+
+## Imports and TypeScript
+
+- Prefer the **`@/`** path alias (as in `App.tsx`) for app code.
+- Avoid `any`; prefer narrowing and shared types from API responses if/when centralized.
+- Relative imports: no `.js` suffix on the frontend — follow Vite/TS settings in `tsconfig.json` / Vite config.
+
+## Scripts (`apps/web`)
+
+- `npm run dev`, `build`, `lint`, `test`, `test:watch` (see `apps/web/package.json`).
