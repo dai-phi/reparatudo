@@ -1,49 +1,80 @@
 ---
-description: API Fastify, camadas e convenções do apps/api
+description: Monorepo — Fastify API (`apps/api`), layers, language conventions, and alignment with the frontend (`apps/web`)
 globs: apps/api/**/*.ts
 alwaysApply: false
 ---
 
-# `apps/api` — convenções
+# `apps/api` — conventions
 
-## Stack e onde colocar código novo
+## Stack and where to put new code
 
-- **Fastify 5**, **TypeScript ESM** (`"type": "module"`, `moduleResolution: NodeNext`), **Zod** (validação HTTP), **pg**, **@fastify/jwt** + cookie, **@fastify/websocket**, **bcryptjs**.
-- **Rota HTTP** → `presentation/http/routes` + `register*Routes` em `main.ts`.
-- **Caso de uso** → `application/` (ex.: `application/auth/`, `application/websocket/`).
-- **Contrato / domínio** → `domain/` (entidades, value objects, **ports** como `IUserRepository`) — sem Fastify nem SQL.
-- **Postgres e adaptadores** → `infrastructure/` (ex.: `persistence/`, hasher, broadcasters).
+- **Fastify 5**, **TypeScript ESM** (`"type": "module"`, `moduleResolution: NodeNext`), **Zod** (HTTP validation), **pg**, **@fastify/jwt** + cookie, **@fastify/websocket**, **bcryptjs**.
+- **HTTP routes** → `presentation/http/routes` + `register*Routes` in `main.ts`.
+- **Use cases** → `application/` (e.g. `application/auth/`, `application/requests/`, `application/websocket/`, `application/utils/`).
+- **Contracts / domain** → `domain/` (entities, value objects, **ports** such as `IUserRepository`) — no Fastify or SQL.
+- **Postgres and adapters** → `infrastructure/` (e.g. `persistence/`, `auth/`, `realtime/`, `geo/`).
 
-## Direção de dependências
+## Folder structure (`apps/api/src`)
 
-- `application` depende de **interfaces** em `domain` (ports), não de `infrastructure` dentro dos use cases.
-- Implementações em `infrastructure` **implementam** as ports; o **wiring** (instanciar adaptadores e injetar) fica em `main.ts`.
+| Area | Path | Role |
+| --- | --- | --- |
+| Entry / wiring | `main.ts`, `fastify.d.ts` | Bootstrap, DI, route registration |
+| Use cases | `application/` (`auth/`, `requests/`, `websocket/`, `utils/`, …) | Orchestration; depends only on ports in `domain` |
+| Domain | `domain/entities/`, `domain/value-objects/`, `domain/ports/` | Rules and contracts; no Fastify/SQL |
+| Adapters | `infrastructure/persistence/` (repositories, `pool.ts`, `init-db.ts`), `infrastructure/auth/`, `infrastructure/realtime/`, `infrastructure/geo/` | Implement ports |
+| HTTP / WS | `presentation/http/routes/`, `presentation/http/mappers/`, `presentation/websocket/`, `presentation/utils/` | Zod, handlers, mappers |
+
+## Architecture and SOLID (aligned with this repo)
+
+- **Dependency rule**: dependencies point inward; `domain` does not import `application`, `infrastructure`, or `presentation`.
+- **Ports / adapters**: new external capability → interface in `domain/ports/`, implementation in `infrastructure/`, wiring in `main.ts`.
+- **Single responsibility**: prefer small use-case modules over god objects; keep handlers thin (parse/validate → application → map response).
+- **Interface segregation**: prefer focused ports (e.g. `IUserRepository`) over one mega-interface.
+- **Open/closed**: extend behavior via new port implementations, not by embedding infra details in the domain.
+
+Dependency flow:
+
+```mermaid
+flowchart LR
+  presentation --> application
+  application --> domain
+  infrastructure --> domain
+```
+
+## Language and copy (code vs user)
+
+| Scope | Language | Notes |
+| --- | --- | --- |
+| Source code (`apps/api`, `apps/web`) | **English** | Module, type, function, and variable names; commits; comments when needed, in English. |
+| Database | **English** | Table/column names, migrations, constraints. |
+| Browser UI (`apps/web`) | **Portuguese** | Page copy, buttons, labels, empty states, validation messages shown in the UI (e.g. `pages/`, `components/`, `value-objects/messages.ts`). |
+| API JSON (messages exposed to clients) | **Portuguese** | Errors and response messages aligned with the PT product; clients may display them as-is. |
 
 ## HTTP
 
-- Funções `registerXRoutes(app, deps?)`; validação de entrada com **Zod** na camada de apresentação.
-- Respostas JSON e mensagens de erro da API em **português**, alinhadas ao estilo já usado no código.
+- Functions `registerXRoutes(app, deps?)`; input validation with **Zod** in the presentation layer.
+- JSON responses and API error messages in **Portuguese**, per the table above.
 
-## Autenticação
+## Authentication
 
-- Fluxo central em `presentation/http/register-authenticate.ts`: cookie `token` ou `Authorization: Bearer`.
-- Rotas protegidas: `preHandler: [app.authenticate]`.
-- Tipos JWT e `authenticate` em `src/fastify.d.ts` — manter coerentes ao alterar claims ou assinatura.
+- Central flow in `presentation/http/register-authenticate.ts`: `token` cookie or `Authorization: Bearer`.
+- Protected routes: `preHandler: [app.authenticate]`.
+- JWT types and `authenticate` in `src/fastify.d.ts` — keep consistent when changing claims or signature.
 
 ## WebSocket
 
-- Registo em `presentation/websocket/register-web-socket.ts`.
-- Autorização da ligação em `application/websocket/authorize-web-socket-connection.ts`.
+- Registration in `presentation/websocket/register-web-socket.ts`.
+- Connection authorization in `application/websocket/authorize-web-socket-connection.ts`.
 
-## ESM e TypeScript
+## ESM and TypeScript
 
-- Imports relativos com sufixo **`.js`** (exigência NodeNext/ESM).
-- Evitar `any` onde já existem tipos; ao adicionar **ports** em `domain`, atualizar as implementações Postgres correspondentes em `infrastructure`.
+- Relative imports with **`.js`** suffix (NodeNext/ESM requirement).
+- Avoid `any` where types already exist; when adding **ports** in `domain`, update the corresponding Postgres implementations in `infrastructure`.
 
 ## Scripts (`apps/api`)
 
 - `npm`: `dev` (tsx watch), `typecheck` (`tsc -p tsconfig.json`), `lint` (`eslint .`).
 
-## Banco de dados
+## Database
 
-- Sempre em ingles as tabelas
+- Tables and the rest of the schema always in **English**.
