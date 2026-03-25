@@ -10,21 +10,43 @@ import type { IPasswordHasher } from "../../../domain/ports/password-hasher.js";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";
 
 const emailSchema = z.string().email();
-const phoneSchema = z.string().min(8);
 
-const passwordSchema = z.string().min(6, "Senha deve ter no minimo 6 caracteres");
+const BR_UF = [
+  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN",
+  "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+] as const;
+
+const fullNameSchema = z.string().min(2).refine(
+  (s) => s.trim().split(/\s+/).filter(Boolean).length >= 2,
+  { message: "Informe nome completo (nome e sobrenome)" }
+);
+
+const phoneSchema = z
+  .string()
+  .min(8)
+  .refine((s) => {
+    const d = s.replace(/\D/g, "");
+    return d.length >= 10 && d.length <= 11;
+  }, { message: "Telefone inválido (use DDD + número)" });
+
+const cepDigitsSchema = z
+  .string()
+  .transform((s) => s.replace(/\D/g, ""))
+  .pipe(z.string().length(8, { message: "CEP deve ter 8 dígitos" }));
+
+const passwordSchema = z.string().min(6, "Senha deve ter no mínimo 6 caracteres");
 
 const clientSchema = z
   .object({
-    name: z.string().min(2),
+    name: fullNameSchema,
     email: emailSchema,
     phone: phoneSchema,
     address: z.string().min(3, "Endereco obrigatorio"),
     complement: z.string().optional().nullable(),
     neighborhood: z.string().optional().nullable(),
-    city: z.string().optional().nullable(),
-    state: z.string().optional().nullable(),
-    cep: z.string().min(8),
+    city: z.string().min(2, "Cidade obrigatoria"),
+    state: z.enum(BR_UF, { message: "Selecione um estado valido" }),
+    cep: cepDigitsSchema,
     password: passwordSchema,
     passwordConfirm: z.string(),
   })
@@ -35,7 +57,7 @@ const clientSchema = z
 
 const providerSchema = z
   .object({
-    name: z.string().min(2),
+    name: fullNameSchema,
     email: emailSchema,
     phone: phoneSchema,
     cpf: z.string().min(11).optional().nullable(),
@@ -44,9 +66,9 @@ const providerSchema = z
     workAddress: z.string().min(3, "Endereco do local de trabalho obrigatorio"),
     workComplement: z.string().optional().nullable(),
     workNeighborhood: z.string().optional().nullable(),
-    workCity: z.string().optional().nullable(),
-    workState: z.string().optional().nullable(),
-    workCep: z.string().min(8),
+    workCity: z.string().min(2, "Cidade obrigatoria"),
+    workState: z.enum(BR_UF, { message: "Selecione um estado valido" }),
+    workCep: cepDigitsSchema,
     password: passwordSchema,
     passwordConfirm: z.string(),
   })

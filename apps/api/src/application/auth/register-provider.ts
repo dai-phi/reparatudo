@@ -5,6 +5,8 @@ import type { IGeoService } from "../../domain/ports/geo-service.js";
 import type { UserRecord } from "../../domain/entities/records.js";
 import type { ServiceId } from "../../domain/value-objects/service-id.js";
 import type { AuthFailure, AuthSuccess } from "./register-client.js";
+import { normalizePhoneDigits } from "../utils/phone-digits.js";
+import { lookupViaCep } from "../utils/viacep-lookup.js";
 
 export type RegisterProviderInput = {
   name: string;
@@ -32,13 +34,21 @@ export async function registerProvider(
 ): Promise<AuthSuccess | AuthFailure> {
   const email = input.email.toLowerCase();
   const phone = input.phone.trim();
+  const phoneDigits = normalizePhoneDigits(phone);
 
   if (await deps.users.existsByEmailLower(email)) {
     return { status: 409, message: "E-mail ja cadastrado" };
   }
+  if (phoneDigits.length >= 8 && (await deps.users.existsByPhoneDigits(phoneDigits))) {
+    return { status: 409, message: "Telefone ja cadastrado" };
+  }
 
   const now = new Date().toISOString();
   const workCep = deps.geo.normalizeCep(input.workCep);
+  const viaCep = await lookupViaCep(workCep);
+  if (!viaCep) {
+    return { status: 400, message: "CEP nao encontrado. Verifique o numero informado." };
+  }
   const workAddressParts = [
     input.workAddress.trim(),
     input.workComplement?.trim(),

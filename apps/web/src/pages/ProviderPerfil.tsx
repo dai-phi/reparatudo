@@ -22,6 +22,8 @@ import {
 } from "@/lib/api";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import { hasFullName } from "@/lib/person-name";
+import { isValidBrazilPhone } from "@/lib/phone";
 import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
 function paymentMethodLabel(f: ProviderPaymentMethod) {
@@ -66,6 +68,7 @@ const ProviderPerfil = () => {
   const [payMethod, setPayMethod] = useState<ProviderPaymentMethod>("pix");
   const [cardLast4, setCardLast4] = useState("");
   const [lastPixPayload, setLastPixPayload] = useState<string | null>(null);
+  const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
 
   const billingSummaryQuery = useQuery({
     queryKey: ["providerBillingSummary"],
@@ -101,6 +104,7 @@ const ProviderPerfil = () => {
   const updateMutation = useMutation({
     mutationFn: updateMe,
     onSuccess: (user) => {
+      setProfileErrors({});
       setStoredUser(user);
       toast.success(UI_MESSAGES.profile.updated);
       queryClient.invalidateQueries({ queryKey: ["me"] });
@@ -137,6 +141,18 @@ const ProviderPerfil = () => {
   };
 
   const handleSaveProfile = () => {
+    const e: Record<string, string> = {};
+    if (profileForm.name.trim() && !hasFullName(profileForm.name)) {
+      e.name = "Informe nome completo (nome e sobrenome)";
+    }
+    if (profileForm.phone.trim() && !isValidBrazilPhone(profileForm.phone)) {
+      e.phone = "Telefone inválido: use DDD + número (10 ou 11 dígitos)";
+    }
+    setProfileErrors(e);
+    if (Object.keys(e).length > 0) {
+      toast.error("Corrija os campos destacados.");
+      return;
+    }
     updateMutation.mutate({
       name: profileForm.name.trim() || undefined,
       phone: profileForm.phone.trim() || undefined,
@@ -243,6 +259,7 @@ const ProviderPerfil = () => {
                       value={profileForm.name}
                       onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
                     />
+                    {profileErrors.name && <p className="text-xs text-destructive mt-1">{profileErrors.name}</p>}
                   </div>
                   <div>
                     <Label>Telefone</Label>
@@ -250,6 +267,7 @@ const ProviderPerfil = () => {
                       value={profileForm.phone}
                       onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
                     />
+                    {profileErrors.phone && <p className="text-xs text-destructive mt-1">{profileErrors.phone}</p>}
                   </div>
                   <div>
                     <Label>Raio de atuação (km)</Label>

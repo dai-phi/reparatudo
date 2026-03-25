@@ -39,6 +39,24 @@ export class PostgresUserRepository implements IUserRepository {
     return Boolean(result.rowCount);
   }
 
+  async existsByPhoneDigits(phoneDigits: string, excludeUserId?: string): Promise<boolean> {
+    if (phoneDigits.length < 8) return false;
+    if (excludeUserId) {
+      const result = await this.db.query(
+        `SELECT 1 FROM users
+         WHERE regexp_replace(phone, '[^0-9]', '', 'g') = $1
+         AND id <> $2`,
+        [phoneDigits, excludeUserId]
+      );
+      return Boolean(result.rowCount);
+    }
+    const result = await this.db.query(
+      "SELECT 1 FROM users WHERE regexp_replace(phone, '[^0-9]', '', 'g') = $1",
+      [phoneDigits]
+    );
+    return Boolean(result.rowCount);
+  }
+
   async insertClient(input: RegisterClientInput): Promise<void> {
     await this.db.query(
       `INSERT INTO users (id, role, name, email, phone, cep, cep_lat, cep_lng, address, password_hash, created_at, updated_at)

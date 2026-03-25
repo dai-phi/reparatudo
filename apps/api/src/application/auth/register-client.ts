@@ -3,6 +3,8 @@ import type { IUserRepository } from "../../domain/ports/user-repository.js";
 import type { IPasswordHasher } from "../../domain/ports/password-hasher.js";
 import type { IGeoService } from "../../domain/ports/geo-service.js";
 import type { UserRecord } from "../../domain/entities/records.js";
+import { normalizePhoneDigits } from "../utils/phone-digits.js";
+import { lookupViaCep } from "../utils/viacep-lookup.js";
 
 export type RegisterClientInput = {
   name: string;
@@ -34,13 +36,21 @@ export async function registerClient(
 ): Promise<AuthSuccess | AuthFailure> {
   const email = input.email.toLowerCase();
   const phone = input.phone.trim();
+  const phoneDigits = normalizePhoneDigits(phone);
 
   if (await deps.users.existsByEmailLower(email)) {
     return { status: 409, message: "E-mail ja cadastrado" };
   }
+  if (phoneDigits.length >= 8 && (await deps.users.existsByPhoneDigits(phoneDigits))) {
+    return { status: 409, message: "Telefone já cadastrado" };
+  }
 
   const now = new Date().toISOString();
   const cep = deps.geo.normalizeCep(input.cep);
+  const viaCep = await lookupViaCep(cep);
+  if (!viaCep) {
+    return { status: 400, message: "CEP não encontrado. Verifique o número informado." };
+  }
   const addressParts = [
     input.address.trim(),
     input.complement?.trim(),

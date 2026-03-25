@@ -1,12 +1,24 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Wrench, Zap, Droplets, PaintBucket, Hammer, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { ApiError, registerProvider, setAuth } from "@/lib/api";
+import { BR_STATES } from "@/lib/brazil-states";
+import { fetchMunicipiosByUf, matchMunicipioName } from "@/lib/ibge-municipios";
+import { hasFullName } from "@/lib/person-name";
+import { isValidBrazilPhone } from "@/lib/phone";
+import { fetchViaCep } from "@/lib/viacep";
 import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
 const serviceOptions = [
@@ -16,6 +28,12 @@ const serviceOptions = [
   { id: "montagem", icon: Hammer, label: "Montagem" },
   { id: "reparos", icon: Wrench, label: "Reparos Gerais" },
 ];
+
+function formatCepInput(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 8);
+  if (d.length <= 5) return d;
+  return `${d.slice(0, 5)}-${d.slice(5)}`;
+}
 
 const ProviderRegister = () => {
   const navigate = useNavigate();
@@ -38,6 +56,34 @@ const ProviderRegister = () => {
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [cities, setCities] = useState<string[]>([]);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+  const [cepLoading, setCepLoading] = useState(false);
+
+  useEffect(() => {
+    if (!form.workState) {
+      setCities([]);
+      return;
+    }
+    let cancelled = false;
+    setCitiesLoading(true);
+    fetchMunicipiosByUf(form.workState)
+      .then((list) => {
+        if (!cancelled) setCities(list);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCities([]);
+          toast.error("Não foi possível carregar as cidades deste estado.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCitiesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.workState]);
 
   const toggleService = (id: string) => {
     setSelectedServices((prev) =>
@@ -45,7 +91,7 @@ const ProviderRegister = () => {
     );
   };
 
-  const validate = () => {
+  const validatePasswords = () => {
     const e: Record<string, string> = {};
     if (form.password.length > 0 && form.password.length < 6) {
       e.password = "Senha deve ter no mínimo 6 caracteres";
@@ -57,9 +103,79 @@ const ProviderRegister = () => {
     return Object.keys(e).length === 0;
   };
 
+  const validateStep1 = () => {
+    const e: Record<string, string> = {};
+    if (!hasFullName(form.name)) e.name = "Informe nome completo (nome e sobrenome)";
+    if (!isValidBrazilPhone(form.phone)) e.phone = "Telefone inválido: use DDD + número (10 ou 11 dígitos)";
+    if (!form.workState) e.workState = "Selecione o estado";
+    if (!form.workCity) e.workCity = "Selecione a cidade";
+    const cepDigits = form.workCep.replace(/\D/g, "");
+    if (cepDigits.length !== 8) e.workCep = "CEP deve ter 8 dígitos";
+    if (!form.workAddress.trim()) e.workAddress = "Endereço obrigatório";
+    if (form.password.length > 0 && form.password.length < 6) e.password = "Senha deve ter no mínimo 6 caracteres";
+    if (form.passwordConfirm && form.password !== form.passwordConfirm) e.passwordConfirm = "As senhas não conferem";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const lookupWorkCep = async () => {
+    const cepDigits = form.workCep.replace(/\D/g, "");
+    if (cepDigits.length !== 8) {
+      setErrors((prev) => ({ ...prev, workCep: "CEP deve ter 8 dígitos" }));
+      return;
+    }
+    setCepLoading(true);
+    try {
+      const data = await fetchViaCep(cepDigits);
+      if (!data) {
+        setErrors((prev) => ({ ...prev, workCep: "CEP não encontrado" }));
+        return;
+      }
+      const munList = await fetchMunicipiosByUf(data.uf);
+      const cityValue = matchMunicipioName(munList, data.localidade) ?? data.localidade;
+      setCities(munList);
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.workCep;
+        return next;
+      });
+      setForm((f) => ({
+        ...f,
+        workState: data.uf,
+        workCity: cityValue,
+        workAddress: data.logradouro ? data.logradouro : f.workAddress,
+        workNeighborhood: data.bairro ? data.bairro : f.workNeighborhood,
+      }));
+      toast.success("Endereço encontrado pelo CEP");
+    } catch {
+      setErrors((prev) => ({ ...prev, workCep: "Não foi possível buscar o CEP" }));
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
+  const goStep2 = () => {
+    if (!validateStep1()) {
+      toast.error("Corrija os campos destacados.");
+      return;
+    }
+    setStep(2);
+  };
+
   const handleSubmit = async () => {
-    if (!validate()) return;
+    if (!validatePasswords()) return;
+    if (!hasFullName(form.name) || !isValidBrazilPhone(form.phone) || !form.workState || !form.workCity) {
+      toast.error("Revise seus dados no passo anterior.");
+      setStep(1);
+      return;
+    }
     const workCepNumeric = form.workCep.replace(/\D/g, "");
+    const via = await fetchViaCep(workCepNumeric);
+    if (!via) {
+      toast.error("CEP não encontrado. Verifique no passo anterior.");
+      setStep(1);
+      return;
+    }
     setLoading(true);
     try {
       const auth = await registerProvider({
@@ -72,8 +188,8 @@ const ProviderRegister = () => {
         workAddress: form.workAddress.trim(),
         workComplement: form.workComplement.trim() || undefined,
         workNeighborhood: form.workNeighborhood.trim() || undefined,
-        workCity: form.workCity.trim() || undefined,
-        workState: form.workState.trim() || undefined,
+        workCity: form.workCity.trim(),
+        workState: form.workState,
         workCep: workCepNumeric,
         password: form.password,
         passwordConfirm: form.passwordConfirm,
@@ -88,6 +204,21 @@ const ProviderRegister = () => {
       setLoading(false);
     }
   };
+
+  const step1Ok =
+    form.name &&
+    hasFullName(form.name) &&
+    form.email &&
+    form.phone &&
+    isValidBrazilPhone(form.phone) &&
+    form.workAddress.trim() &&
+    form.workState &&
+    form.workCity &&
+    form.workCep.replace(/\D/g, "").length === 8 &&
+    form.password &&
+    form.password.length >= 6 &&
+    form.passwordConfirm &&
+    form.password === form.passwordConfirm;
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -140,7 +271,8 @@ const ProviderRegister = () => {
             <div className="space-y-4">
               <div>
                 <Label htmlFor="name">Nome completo</Label>
-                <Input id="name" placeholder="Seu nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <Input id="name" placeholder="Ex.: Luis Silva" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
               </div>
               <div>
                 <Label htmlFor="email">E-mail</Label>
@@ -149,9 +281,10 @@ const ProviderRegister = () => {
               <div>
                 <Label htmlFor="phone">Telefone</Label>
                 <Input id="phone" placeholder="(11) 99999-9999" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                {errors.phone && <p className="text-xs text-destructive mt-1">{errors.phone}</p>}
               </div>
               <div>
-                <Label htmlFor="cpf">CPF</Label>
+                <Label htmlFor="cpf">CPF (opcional)</Label>
                 <Input id="cpf" placeholder="000.000.000-00" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} />
               </div>
 
@@ -159,30 +292,83 @@ const ProviderRegister = () => {
                 <p className="text-sm font-medium text-foreground mb-3">Endereço do local de trabalho</p>
                 <div className="space-y-3">
                   <div>
-                    <Label htmlFor="workAddress">Endereço completo *</Label>
-                    <Input id="workAddress" placeholder="Rua, número" value={form.workAddress} onChange={(e) => setForm({ ...form, workAddress: e.target.value })} required />
+                    <Label>Estado</Label>
+                    <Select
+                      value={form.workState || undefined}
+                      onValueChange={(v) => setForm((f) => ({ ...f, workState: v, workCity: "" }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BR_STATES.map((s) => (
+                          <SelectItem key={s.uf} value={s.uf}>
+                            {s.name} ({s.uf})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.workState && <p className="text-xs text-destructive mt-1">{errors.workState}</p>}
                   </div>
                   <div>
-                    <Label htmlFor="workComplement">Complemento</Label>
+                    <Label>Cidade</Label>
+                    <Select
+                      value={form.workCity || undefined}
+                      onValueChange={(v) => setForm((f) => ({ ...f, workCity: v }))}
+                      disabled={!form.workState || citiesLoading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            form.workState ? (citiesLoading ? "Carregando…" : "Selecione a cidade") : "Selecione o estado primeiro"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {cities.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            {c}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.workCity && <p className="text-xs text-destructive mt-1">{errors.workCity}</p>}
+                  </div>
+                  <div>
+                    <Label htmlFor="workCep">CEP</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="workCep"
+                        placeholder="00000-000"
+                        value={form.workCep}
+                        onChange={(e) => setForm({ ...form, workCep: formatCepInput(e.target.value) })}
+                        onBlur={() => {
+                          if (form.workCep.replace(/\D/g, "").length === 8) void lookupWorkCep();
+                        }}
+                      />
+                      <Button type="button" variant="outline" disabled={cepLoading} onClick={() => void lookupWorkCep()}>
+                        {cepLoading ? "…" : "Buscar"}
+                      </Button>
+                    </div>
+                    {errors.workCep && <p className="text-xs text-destructive mt-1">{errors.workCep}</p>}
+                  </div>
+                  <div>
+                    <Label htmlFor="workAddress">Rua e número *</Label>
+                    <Input
+                      id="workAddress"
+                      placeholder="Rua, número"
+                      value={form.workAddress}
+                      onChange={(e) => setForm({ ...form, workAddress: e.target.value })}
+                    />
+                    {errors.workAddress && <p className="text-xs text-destructive mt-1">{errors.workAddress}</p>}
+                  </div>
+                  <div>
+                    <Label htmlFor="workComplement">Complemento (opcional)</Label>
                     <Input id="workComplement" placeholder="Sala, andar..." value={form.workComplement} onChange={(e) => setForm({ ...form, workComplement: e.target.value })} />
                   </div>
                   <div>
                     <Label htmlFor="workNeighborhood">Bairro</Label>
                     <Input id="workNeighborhood" placeholder="Bairro" value={form.workNeighborhood} onChange={(e) => setForm({ ...form, workNeighborhood: e.target.value })} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label htmlFor="workCity">Cidade</Label>
-                      <Input id="workCity" placeholder="Cidade" value={form.workCity} onChange={(e) => setForm({ ...form, workCity: e.target.value })} />
-                    </div>
-                    <div>
-                      <Label htmlFor="workState">Estado</Label>
-                      <Input id="workState" placeholder="UF" value={form.workState} onChange={(e) => setForm({ ...form, workState: e.target.value })} maxLength={2} />
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="workCep">CEP</Label>
-                    <Input id="workCep" placeholder="00000-000" value={form.workCep} onChange={(e) => setForm({ ...form, workCep: e.target.value })} required />
                   </div>
                 </div>
               </div>
@@ -212,12 +398,7 @@ const ProviderRegister = () => {
                 {errors.passwordConfirm && <p className="text-xs text-destructive mt-1">{errors.passwordConfirm}</p>}
               </div>
 
-              <Button
-                className="w-full"
-                size="lg"
-                onClick={() => setStep(2)}
-                disabled={!form.name || !form.email || !form.password || !form.passwordConfirm || !form.workAddress || !form.workCep || form.password !== form.passwordConfirm}
-              >
+              <Button className="w-full" size="lg" onClick={goStep2} disabled={!step1Ok}>
                 Continuar
               </Button>
             </div>
@@ -261,7 +442,7 @@ const ProviderRegister = () => {
                 <Button variant="outline" className="flex-1" size="lg" onClick={() => setStep(1)}>
                   Voltar
                 </Button>
-                <Button variant="hero" className="flex-1" size="lg" onClick={handleSubmit} disabled={selectedServices.length === 0 || loading}>
+                <Button variant="hero" className="flex-1" size="lg" onClick={() => void handleSubmit()} disabled={selectedServices.length === 0 || loading}>
                   Cadastrar
                 </Button>
               </div>
