@@ -218,7 +218,7 @@ const Chat = () => {
   if (requestQuery.isError || !requestQuery.data) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-muted-foreground gap-4">
-        Nao foi possível carregar o chat.
+        Não foi possível carregar o chat.
         <Button variant="hero" onClick={() => navigate(isClient ? "/client/home" : "/provider/dashboard")}>Voltar</Button>
       </div>
     );

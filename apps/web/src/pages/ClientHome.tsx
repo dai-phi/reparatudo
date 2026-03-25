@@ -312,7 +312,7 @@ const ClientHome = () => {
             {clientRequestsQuery.isLoading ? (
               <div className="text-center py-12 text-muted-foreground">Carregando...</div>
             ) : clientRequestsQuery.isError ? (
-              <div className="text-center py-12 text-muted-foreground">Nao foi possível carregar os pedidos.</div>
+              <div className="text-center py-12 text-muted-foreground">Não foi possível carregar os pedidos.</div>
             ) : requestedSegment === "open" ? (
               openRequests.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground rounded-xl border border-dashed border-border">
@@ -399,7 +399,7 @@ const ClientHome = () => {
               <div className="mb-8 space-y-4">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <div>
-                    <h2 className="font-display text-lg font-bold text-foreground">Prestadores Disponiveis</h2>
+                    <h2 className="font-display text-lg font-bold text-foreground">Prestadores Disponíveis</h2>
                     <p className="text-sm text-muted-foreground">
                       para {selectedServiceMeta?.label ?? "o serviço selecionado"}
                     </p>
@@ -428,7 +428,7 @@ const ClientHome = () => {
                 {providersQuery.isLoading ? (
                   <div className="text-center text-muted-foreground py-8">Carregando prestadores...</div>
                 ) : providersQuery.isError ? (
-                  <div className="text-center text-muted-foreground py-8">Nao foi possível carregar os prestadores.</div>
+                  <div className="text-center text-muted-foreground py-8">Não foi possível carregar os prestadores.</div>
                 ) : (providersQuery.data?.length ?? 0) === 0 ? (
                   <div className="text-center text-muted-foreground py-8">Nenhum prestador no raio informado.</div>
                 ) : (
@@ -451,12 +451,12 @@ const ClientHome = () => {
                             <p className="font-semibold text-card-foreground">{provider.name}</p>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <Star className="w-4 h-4 text-warning fill-warning" />
-                              {provider.rating.toFixed(1)} • Tempo medio: {avgLabel}
+                              {provider.rating.toFixed(1)} • Tempo médio: {avgLabel}
                             </div>
-                            <p className="text-xs text-muted-foreground">Distancia: {provider.distanceKm ?? "--"} km</p>
+                            <p className="text-xs text-muted-foreground">Distância: {provider.distanceKm ?? "--"} km</p>
                             {provider.lastServiceDistanceKm != null && (
                               <p className="text-xs text-muted-foreground">
-                                Ultimo atendimento a {provider.lastServiceDistanceKm} km de voce
+                                Último atendimento a {provider.lastServiceDistanceKm} km de você
                               </p>
                             )}
                           </div>

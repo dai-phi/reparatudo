@@ -265,7 +265,7 @@ export async function registerProviderRoutes(
     const freeEndsAt = addMonths(createdAt, FREE_TRIAL_MONTHS);
     const now = new Date();
     if (now < freeEndsAt) {
-      return reply.code(400).send({ message: "Voce ainda esta no periodo gratuito. Nao e necessario pagar." });
+      return reply.code(400).send({ message: "Voce ainda esta no periodo gratuito. Não e necessario pagar." });
     }
 
     const paidResult = await providers.listPaidReferenceMonthsRaw(request.user.sub);
@@ -283,7 +283,7 @@ export async function registerProviderRoutes(
     }
 
     if (!targetMonth) {
-      return reply.code(400).send({ message: "Nao ha mensalidade em aberto no momento." });
+      return reply.code(400).send({ message: "Não ha mensalidade em aberto no momento." });
     }
 
     const id = randomUUID();

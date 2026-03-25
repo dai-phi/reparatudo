@@ -305,7 +305,7 @@ const ProviderPerfil = () => {
                   <CardContent className="space-y-4">
                     {billingSummaryQuery.isLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
                     {billingSummaryQuery.isError && (
-                      <p className="text-sm text-destructive">Nao foi possível carregar o resumo de cobrança.</p>
+                      <p className="text-sm text-destructive">Não foi possível carregar o resumo de cobrança.</p>
                     )}
                     {summary && (
                       <>
@@ -464,7 +464,7 @@ const ProviderPerfil = () => {
                   <CardContent>
                     {billingPaymentsQuery.isLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
                     {billingPaymentsQuery.isError && (
-                      <p className="text-sm text-destructive">Nao foi possível carregar o extrato.</p>
+                      <p className="text-sm text-destructive">Não foi possível carregar o extrato.</p>
                     )}
                     {billingPaymentsQuery.data && billingPaymentsQuery.data.length === 0 && (
                       <p className="text-sm text-muted-foreground">Nenhum pagamento registrado ainda.</p>

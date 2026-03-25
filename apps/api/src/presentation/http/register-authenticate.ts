@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { UNAUTHORIZED } from "../../domain/value-objects/messages.js";
 
 export function registerAuthenticate(app: FastifyInstance) {
   app.decorate("authenticate", async function (request: any, reply: any) {
@@ -8,13 +9,13 @@ export function registerAuthenticate(app: FastifyInstance) {
         ? request.headers.authorization.slice(7)
         : null);
     if (!token) {
-      return reply.code(401).send({ message: "Nao autorizado" });
+      return reply.code(401).send({ message: UNAUTHORIZED });
     }
     try {
       const decoded = await app.jwt.verify(token);
       request.user = decoded;
     } catch {
-      return reply.code(401).send({ message: "Nao autorizado" });
+      return reply.code(401).send({ message: UNAUTHORIZED });
     }
   });
 }

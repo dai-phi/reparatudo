@@ -37,3 +37,4 @@ export const apiMessages = {
   } as const;
 
   export const NO_DESCRIPTION = "Sem descrição";
+  export const UNAUTHORIZED = "Não autorizado";
