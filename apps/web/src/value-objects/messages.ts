@@ -9,6 +9,14 @@ export const UI_MESSAGES = {
     createdAndWaitingProvider: "Pedido enviado! Aguardando o aceite do prestador.",
     providerRejectedOrCancelled: "Prestador recusou ou cancelou o pedido.",
     completedAndRatePrompt: "Serviço finalizado! Avalie o prestador abaixo (opcional).",
+    waitingProviderResponse: "Aguardando resposta do prestador",
+    providerNameLoading: "Carregando prestador…",
+    viewInRequestedServices: "Ver em Serviços Solicitados",
+    cancelPendingRequest: "Cancelar pedido",
+    cancelPendingConfirmTitle: "Cancelar este pedido?",
+    cancelPendingConfirmDescription:
+      "O pedido deixará de ficar em aberto e o prestador será notificado. Pode solicitar outro serviço depois.",
+    pendingRedirectHint: "Quando o prestador aceitar, você será levado ao chat automaticamente.",
   },
   chat: {
     serviceCancelled: "Serviço cancelado.",

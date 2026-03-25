@@ -14,6 +14,7 @@ import { PostgresProviderSearchRepository } from "./infrastructure/persistence/r
 import { PostgresGeoService } from "./infrastructure/geo/postgres-geo-service.js";
 import { BcryptPasswordHasher } from "./infrastructure/auth/password-hasher.js";
 import { RealtimeBroadcasterAdapter } from "./infrastructure/realtime/realtime-broadcaster-adapter.js";
+import { createEmailSender } from "./infrastructure/email/create-email-sender.js";
 import { registerAuthenticate } from "./presentation/http/register-authenticate.js";
 import { registerAuthRoutes } from "./presentation/http/routes/auth.js";
 import { registerMeRoutes } from "./presentation/http/routes/me.js";
@@ -51,6 +52,7 @@ const providerSearch = new PostgresProviderSearchRepository();
 const geo = new PostgresGeoService();
 const passwordHasher = new BcryptPasswordHasher();
 const realtime = new RealtimeBroadcasterAdapter();
+const email = createEmailSender();
 
 registerAuthenticate(app);
 registerWebSocketRoute(app, requests);
@@ -63,7 +65,7 @@ await registerAuthRoutes(app, { users, geo, passwordHasher });
 await registerMeRoutes(app, profiles);
 await registerClientRoutes(app, clients);
 await registerProviderRoutes(app, providers);
-await registerRequestRoutes(app, { users, requests, geo, realtime });
+await registerRequestRoutes(app, { users, requests, geo, realtime, email });
 await registerProviderSearchRoutes(app, providerSearch);
 
 const port = Number(process.env.PORT || 3333);

@@ -5,6 +5,7 @@ import type { IUserRepository } from "../../../domain/ports/user-repository.js";
 import type { IRequestRepository } from "../../../domain/ports/request-repository.js";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";
 import type { IRealtimeBroadcaster } from "../../../domain/ports/realtime-broadcaster.js";
+import type { IEmailSender } from "../../../domain/ports/email-sender.js";
 import { formatRequestDetails } from "../mappers/request-details-mapper.js";
 import { parseCurrencyInput } from "../../utils/format.js";
 import {
@@ -49,6 +50,7 @@ export type RequestRouteDeps = {
   requests: IRequestRepository;
   geo: IGeoService;
   realtime: IRealtimeBroadcaster;
+  email: IEmailSender;
 };
 
 type RequestParams = { id: string };
@@ -59,6 +61,7 @@ export async function registerRequestRoutes(app: FastifyInstance, deps: RequestR
     requests: deps.requests,
     geo: deps.geo,
     realtime: deps.realtime,
+    email: deps.email,
   };
 
   const details = async (requestId: string) => {

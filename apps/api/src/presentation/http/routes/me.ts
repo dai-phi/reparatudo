@@ -7,7 +7,10 @@ import { PostgresProfileRepository } from "../../../infrastructure/persistence/r
 const geo = new PostgresGeoService();
 
 const updateClientSchema = z.object({
-  name: z.string().min(2).optional(),
+  name: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : typeof v === "string" ? v.trim() : v),
+    z.string().min(2).optional()
+  ),
   phone: z.string().min(8).optional(),
   address: z.string().optional().nullable(),
   complement: z.string().optional().nullable(),
@@ -15,6 +18,7 @@ const updateClientSchema = z.object({
   city: z.string().optional().nullable(),
   state: z.string().optional().nullable(),
   cep: z.string().min(8).optional(),
+  photoUrl: z.string().url().optional().nullable(),
 });
 
 const updateProviderSchema = z.object({
@@ -88,21 +92,24 @@ export async function registerMeRoutes(
 
       if (data.name !== undefined) {
         updates.push(`name = $${idx++}`);
-        values.push(data.name.trim());
+        values.push(data.name);
       }
       if (data.phone !== undefined) {
         updates.push(`phone = $${idx++}`);
         values.push(data.phone.trim());
       }
-      if (data.address !== undefined) {
-        updates.push(`address = $${idx++}`);
-        values.push(data.address ?? null);
+      if (data.photoUrl !== undefined) {
+        updates.push(`photo_url = $${idx++}`);
+        values.push(data.photoUrl ?? null);
       }
       if (data.cep !== undefined) {
         const cep = geo.normalizeCep(data.cep);
         if (cep.length !== 8) {
           return reply.code(400).send({ message: "CEP invalido" });
         }
+        const prevCep = geo.normalizeCep(user.cep ?? "");
+        const cepUnchanged = prevCep.length === 8 && cep === prevCep;
+
         const addressParts = [
           data.address ?? user.address,
           data.complement,
@@ -112,19 +119,28 @@ export async function registerMeRoutes(
           cep,
         ].filter(Boolean);
         const fullAddress = addressParts.join(", ");
-        let coords = fullAddress.length > 5 ? await geo.getAddressCoords(fullAddress) : null;
-        if (!coords) coords = await geo.getCepCoords(cep);
-        if (!coords) {
-          return reply.code(400).send({ message: "Endereco ou CEP invalido" });
+
+        if (cepUnchanged) {
+          updates.push(`address = $${idx++}`);
+          values.push(fullAddress);
+        } else {
+          let coords = fullAddress.length > 5 ? await geo.getAddressCoords(fullAddress) : null;
+          if (!coords) coords = await geo.getCepCoords(cep);
+          if (!coords) {
+            return reply.code(400).send({ message: "Endereco ou CEP invalido" });
+          }
+          updates.push(`cep = $${idx++}`);
+          values.push(cep);
+          updates.push(`cep_lat = $${idx++}`);
+          values.push(coords.lat);
+          updates.push(`cep_lng = $${idx++}`);
+          values.push(coords.lng);
+          updates.push(`address = $${idx++}`);
+          values.push(fullAddress);
         }
-        updates.push(`cep = $${idx++}`);
-        values.push(cep);
-        updates.push(`cep_lat = $${idx++}`);
-        values.push(coords.lat);
-        updates.push(`cep_lng = $${idx++}`);
-        values.push(coords.lng);
+      } else if (data.address !== undefined) {
         updates.push(`address = $${idx++}`);
-        values.push(fullAddress);
+        values.push(data.address ?? null);
       }
     } else {
       const parsed = updateProviderSchema.safeParse(request.body);

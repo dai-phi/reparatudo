@@ -168,6 +168,22 @@ export class ApiError extends Error {
   }
 }
 
+/** Works even when multiple bundles duplicate the ApiError class (instanceof would fail). */
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    typeof (error as { status: unknown }).status === "number" &&
+    "message" in error &&
+    typeof (error as { message: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+  return fallback;
+}
+
 const TOKEN_KEY = "fixja_token";
 const USER_KEY = "fixja_user";
 

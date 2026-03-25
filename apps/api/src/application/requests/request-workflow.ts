@@ -4,6 +4,7 @@ import type { IUserRepository } from "../../domain/ports/user-repository.js";
 import type { IRequestRepository } from "../../domain/ports/request-repository.js";
 import type { IGeoService } from "../../domain/ports/geo-service.js";
 import type { IRealtimeBroadcaster } from "../../domain/ports/realtime-broadcaster.js";
+import type { IEmailSender } from "../../domain/ports/email-sender.js";
 import type { ServiceId } from "../../domain/value-objects/service-id.js";
 import { SERVICE_LABELS } from "../../domain/value-objects/service-id.js";
 import { formatRelativeTime, formatTime } from "../utils/format.js";
@@ -18,6 +19,7 @@ export type RequestWorkflowDeps = {
   requests: IRequestRepository;
   geo: IGeoService;
   realtime: IRealtimeBroadcaster;
+  email: IEmailSender;
 };
 
 export type CreateRequestInput = {
@@ -29,6 +31,70 @@ export type CreateRequestInput = {
 };
 
 export type Failure = { status: number; message: string };
+
+function fireAndForgetProviderNewRequestEmail(
+  deps: RequestWorkflowDeps,
+  params: { providerId: string; clientName: string; serviceLabel: string; descriptionLine: string; requestId: string }
+): void {
+  void (async () => {
+    try {
+      const user = await deps.users.findById(params.providerId);
+      if (!user?.email?.trim()) return;
+      const firstName = user.name.trim().split(/\s+/)[0] || "prestador";
+      await deps.email.send({
+        to: user.email.trim(),
+        subject: `Novo pedido — ${params.serviceLabel}`,
+        text: [
+          `Olá, ${firstName},`,
+          ``,
+          `Recebeu um novo pedido no Repara Tudo.`,
+          ``,
+          `Cliente: ${params.clientName}`,
+          `Serviço: ${params.serviceLabel}`,
+          `Descrição: ${params.descriptionLine}`,
+          `ID do pedido: ${params.requestId}`,
+          ``,
+          `Abra a aplicação para aceitar ou recusar.`,
+        ].join("\n"),
+      });
+    } catch (err) {
+      console.error("[email] notify provider failed", err);
+    }
+  })();
+}
+
+function fireAndForgetClientAcceptEmail(
+  deps: RequestWorkflowDeps,
+  params: { clientId: string; requestId: string; providerId: string }
+): void {
+  void (async () => {
+    try {
+      const [clientUser, providerUser] = await Promise.all([
+        deps.users.findById(params.clientId),
+        deps.users.findById(params.providerId),
+      ]);
+      if (!clientUser?.email?.trim()) return;
+      const providerName = providerUser?.name?.trim() || "O prestador";
+      const firstName = clientUser.name.trim().split(/\s+/)[0] || "";
+      const base = process.env.APP_PUBLIC_URL?.replace(/\/$/, "") || "";
+      const chatLink = base ? `${base}/chat/${params.requestId}` : null;
+      const greeting = firstName ? `Olá, ${firstName},` : "Olá,";
+      await deps.email.send({
+        to: clientUser.email.trim(),
+        subject: "Pedido aceito pelo prestador",
+        text: [
+          greeting,
+          ``,
+          `${providerName} aceitou o seu pedido no Repara Tudo.`,
+          ``,
+          ...(chatLink ? [`Abra o chat: ${chatLink}`] : [`Abra a aplicação para continuar a conversa.`]),
+        ].join("\n"),
+      });
+    } catch (err) {
+      console.error("[email] notify client failed", err);
+    }
+  })();
+}
 
 export async function listMessagesForRequest(
   requests: IRequestRepository,
@@ -162,6 +228,14 @@ export async function createRequest(
     },
   });
 
+  fireAndForgetProviderNewRequestEmail(deps, {
+    providerId: provider.id,
+    clientName,
+    serviceLabel,
+    descriptionLine: input.description?.trim() || NO_DESCRIPTION,
+    requestId,
+  });
+
   return { requestId };
 }
 
@@ -217,6 +291,13 @@ export async function acceptRequest(
     },
   });
   await broadcastRequestUpdate(deps, target.id, formatDetails);
+
+  fireAndForgetClientAcceptEmail(deps, {
+    clientId: target.clientId,
+    requestId: target.id,
+    providerId: params.providerId,
+  });
+
   return { ok: true };
 }
 

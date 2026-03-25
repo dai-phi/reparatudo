@@ -10,10 +10,31 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ApiError, createRating, createServiceRequest, getClientHistory, getClientRequests, getProviders, getRequest, logout } from "@/lib/api";
+import {
+  ApiError,
+  cancelRequest,
+  createRating,
+  createServiceRequest,
+  getClientHistory,
+  getClientRequests,
+  getProviders,
+  getRequest,
+  logout,
+} from "@/lib/api";
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
@@ -87,6 +108,7 @@ const ClientHome = () => {
   const [ratingServiceId, setRatingServiceId] = useState<string | null>(null);
   const [tempRating, setTempRating] = useState(0);
   const [tempReview, setTempReview] = useState("");
+  const [cancelPendingOpen, setCancelPendingOpen] = useState(false);
 
   const selectedServiceMeta = services.find((service) => service.id === selectedService);
 
@@ -163,7 +185,23 @@ const ClientHome = () => {
     refetchInterval: 10000,
   });
 
-  const searching = requestMutation.isPending || pendingRequestQuery.isFetching;
+  const isSubmittingRequest = requestMutation.isPending;
+
+  const cancelPendingMutation = useMutation({
+    mutationFn: () => cancelRequest(pendingRequestId!),
+    onSuccess: () => {
+      const rid = pendingRequestId;
+      setPendingRequestId(null);
+      setCancelPendingOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["clientRequests"] });
+      if (rid) queryClient.removeQueries({ queryKey: ["request", rid] });
+      toast.success(UI_MESSAGES.request.cancelled);
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.request.cancel;
+      toast.error(message);
+    },
+  });
   const completedServices = historyQuery.data ?? [];
 
   const handleRequestWsEvent = useCallback(
@@ -399,33 +437,81 @@ const ClientHome = () => {
               <div className="mb-8 space-y-4">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <div>
-                    <h2 className="font-display text-lg font-bold text-foreground">Prestadores Disponíveis</h2>
+                    <h2 className="font-display text-lg font-bold text-foreground">
+                      {pendingRequestId ? "Pedido em aberto" : "Prestadores Disponíveis"}
+                    </h2>
                     <p className="text-sm text-muted-foreground">
                       para {selectedServiceMeta?.label ?? "o serviço selecionado"}
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {services.map((service) => {
-                      const selected = selectedService === service.id;
-                      return (
-                        <button
-                          key={service.id}
-                          type="button"
-                          onClick={() => setSelectedService(service.id)}
-                          className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
-                            selected
-                              ? "bg-accent text-accent-foreground border-accent shadow-sm"
-                              : "bg-background border-border text-muted-foreground hover:border-accent/50"
-                          }`}
-                        >
-                          {service.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {!pendingRequestId && (
+                    <div className="flex flex-wrap gap-2">
+                      {services.map((service) => {
+                        const selected = selectedService === service.id;
+                        return (
+                          <button
+                            key={service.id}
+                            type="button"
+                            onClick={() => setSelectedService(service.id)}
+                            className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                              selected
+                                ? "bg-accent text-accent-foreground border-accent shadow-sm"
+                                : "bg-background border-border text-muted-foreground hover:border-accent/50"
+                            }`}
+                          >
+                            {service.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
-                {providersQuery.isLoading ? (
+                {pendingRequestId ? (
+                  <Card className="border-accent/30 bg-accent/5 shadow-card">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg font-display">
+                        {UI_MESSAGES.request.waitingProviderResponse}
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        {pendingRequestQuery.isLoading
+                          ? UI_MESSAGES.request.providerNameLoading
+                          : pendingRequestQuery.data?.provider?.name ?? UI_MESSAGES.request.providerNameLoading}
+                      </p>
+                    </CardHeader>
+                    <CardContent className="pb-2 pt-0">
+                      <p className="text-sm text-muted-foreground">{UI_MESSAGES.request.pendingRedirectHint}</p>
+                    </CardContent>
+                    <CardFooter className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setActiveTab("requested");
+                          setRequestedSegment("open");
+                        }}
+                      >
+                        {UI_MESSAGES.request.viewInRequestedServices}
+                      </Button>
+                      {pendingRequestQuery.data?.status === "accepted" && (
+                        <Button asChild type="button" variant="hero" size="sm">
+                          <Link to={`/chat/${pendingRequestId}`}>Abrir chat</Link>
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => setCancelPendingOpen(true)}
+                        disabled={cancelPendingMutation.isPending}
+                      >
+                        {UI_MESSAGES.request.cancelPendingRequest}
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ) : providersQuery.isLoading ? (
                   <div className="text-center text-muted-foreground py-8">Carregando prestadores...</div>
                 ) : providersQuery.isError ? (
                   <div className="text-center text-muted-foreground py-8">Não foi possível carregar os prestadores.</div>
@@ -464,9 +550,13 @@ const ClientHome = () => {
                             variant="hero"
                             size="sm"
                             onClick={() => handleRequest(provider.id)}
-                            disabled={searching || Boolean(pendingRequestId)}
+                            disabled={isSubmittingRequest || Boolean(pendingRequestId)}
                           >
-                            Chamar
+                            {isSubmittingRequest && requestMutation.variables?.providerId === provider.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              "Chamar"
+                            )}
                           </Button>
                         </div>
                       );
@@ -534,11 +624,28 @@ const ClientHome = () => {
               )}
             </AnimatePresence>
 
-            {pendingRequestId && (
-              <div className="text-center text-sm text-muted-foreground">
-                Aguardando aceite do prestador selecionado...
-              </div>
-            )}
+            <AlertDialog open={cancelPendingOpen} onOpenChange={setCancelPendingOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{UI_MESSAGES.request.cancelPendingConfirmTitle}</AlertDialogTitle>
+                  <AlertDialogDescription>{UI_MESSAGES.request.cancelPendingConfirmDescription}</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Voltar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => cancelPendingMutation.mutate()}
+                    disabled={cancelPendingMutation.isPending}
+                  >
+                    {cancelPendingMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      "Confirmar cancelamento"
+                    )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </>
         ) : (
           /* History / Completed Services */

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Bell, LogOut, User, Wrench } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ApiError, logout, setStoredUser, updateMe } from "@/lib/api";
+import { getApiErrorMessage, logout, setStoredUser, updateMe } from "@/lib/api";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
@@ -56,8 +56,7 @@ const ClientPerfil = () => {
       queryClient.invalidateQueries({ queryKey: ["me"] });
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : UI_ERRORS.profile.update;
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, UI_ERRORS.profile.update));
     },
   });
 
@@ -83,14 +82,14 @@ const ClientPerfil = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 bg-card border-b border-border">
-        <div className="container flex items-center justify-between h-16">
+        <div className="container flex flex-wrap items-center justify-between gap-3 h-auto min-h-16 py-2 sm:h-16 sm:py-0 px-4 sm:px-6">
           <Link to="/client/home" className="flex items-center gap-2 text-foreground hover:opacity-90">
             <div className="w-8 h-8 rounded-lg bg-gradient-accent flex items-center justify-center">
               <Wrench className="w-4 h-4 text-accent-foreground" />
             </div>
             <span className="font-display text-lg font-bold">Repara Tudo!</span>
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 ml-auto shrink-0">
             <button type="button" className="p-2 text-muted-foreground hover:text-foreground">
               <Bell className="w-5 h-5" />
             </button>
@@ -108,84 +107,90 @@ const ClientPerfil = () => {
         </div>
       </header>
 
-      <div className="container py-8">
+      <div className="container py-6 sm:py-8 px-4 sm:px-6">
         <Link
           to="/client/home"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
         >
-          <ArrowLeft className="w-4 h-4" /> Voltar ao início
+          <ArrowLeft className="w-4 h-4 shrink-0" /> Voltar ao início
         </Link>
 
-        <div className="max-w-md space-y-4">
-          <h1 className="font-display text-2xl font-bold text-foreground">Meu perfil</h1>
-          <div className="p-6 rounded-xl bg-card shadow-card border border-border space-y-4">
-            <div className="flex items-center gap-4 mb-4">
+        <div className="max-w-3xl mx-auto w-full space-y-6">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Meu perfil</h1>
+          <div className="rounded-xl bg-card shadow-card p-4 sm:p-6 space-y-4 sm:max-w-2xl border border-border">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
               {form.photoUrl ? (
-                <img src={form.photoUrl} alt="Foto" className="w-16 h-16 rounded-full object-cover" />
+                <img
+                  src={form.photoUrl}
+                  alt="Foto"
+                  className="w-24 h-24 sm:w-16 sm:h-16 rounded-full object-cover mx-auto sm:mx-0"
+                />
               ) : (
-                <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center text-lg font-bold text-accent">
+                <div className="w-24 h-24 sm:w-16 sm:h-16 rounded-full bg-accent/10 flex items-center justify-center text-2xl sm:text-lg font-bold text-accent mx-auto sm:mx-0">
                   {(me?.name ?? "?").charAt(0)}
                 </div>
               )}
-              <div>
+              <div className="text-center sm:text-left min-w-0">
                 <p className="font-bold text-card-foreground">{me?.name ?? "Cliente"}</p>
-                <p className="text-sm text-muted-foreground">{me?.email ?? ""}</p>
+                <p className="text-sm text-muted-foreground break-all">{me?.email ?? ""}</p>
               </div>
             </div>
-            <div>
-              <Label>Nome</Label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Telefone</Label>
-              <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Endereço</Label>
-              <Input
-                placeholder="Rua, número"
-                value={form.address}
-                onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label>Complemento</Label>
-              <Input
-                placeholder="Apto, bloco..."
-                value={form.complement}
-                onChange={(e) => setForm((f) => ({ ...f, complement: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label>Bairro</Label>
-              <Input value={form.neighborhood} onChange={(e) => setForm((f) => ({ ...f, neighborhood: e.target.value }))} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-4">
               <div>
-                <Label>Cidade</Label>
-                <Input value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
+                <Label>Nome Completo</Label>
+                <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
               </div>
               <div>
-                <Label>Estado</Label>
-                <Input value={form.state} maxLength={2} onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))} />
+                <Label>Telefone</Label>
+                <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
               </div>
+              <div>
+                <Label>Endereço</Label>
+                <Input
+                  placeholder="Rua, número"
+                  value={form.address}
+                  onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>Complemento</Label>
+                <Input
+                  placeholder="Apto, bloco..."
+                  value={form.complement}
+                  onChange={(e) => setForm((f) => ({ ...f, complement: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>Bairro</Label>
+                <Input value={form.neighborhood} onChange={(e) => setForm((f) => ({ ...f, neighborhood: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label>Cidade</Label>
+                  <Input value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
+                </div>
+                <div>
+                  <Label>Estado</Label>
+                  <Input value={form.state} maxLength={2} onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <Label>CEP</Label>
+                <Input placeholder="00000-000" value={form.cep} onChange={(e) => setForm((f) => ({ ...f, cep: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Foto (URL)</Label>
+                <Input
+                  placeholder="https://..."
+                  value={form.photoUrl}
+                  onChange={(e) => setForm((f) => ({ ...f, photoUrl: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Cole o link de uma imagem para sua foto de perfil</p>
+              </div>
+              <Button variant="hero" className="w-full sm:w-auto" onClick={handleSave} disabled={updateMutation.isPending}>
+                Salvar alterações
+              </Button>
             </div>
-            <div>
-              <Label>CEP</Label>
-              <Input placeholder="00000-000" value={form.cep} onChange={(e) => setForm((f) => ({ ...f, cep: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Foto (URL)</Label>
-              <Input
-                placeholder="https://..."
-                value={form.photoUrl}
-                onChange={(e) => setForm((f) => ({ ...f, photoUrl: e.target.value }))}
-              />
-              <p className="text-xs text-muted-foreground mt-1">Cole o link de uma imagem para sua foto de perfil</p>
-            </div>
-            <Button variant="hero" className="w-full" onClick={handleSave} disabled={updateMutation.isPending}>
-              Salvar alterações
-            </Button>
           </div>
         </div>
       </div>
