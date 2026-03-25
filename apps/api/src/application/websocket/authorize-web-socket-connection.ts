@@ -1,5 +1,6 @@
 import type { Role } from "../../domain/entities/role.js";
 import type { IRequestRepository } from "../../domain/ports/request-repository.js";
+import { apiMessages } from "../../domain/value-objects/messages.js";
 
 export type WsAuthInput = {
   userId: string;
@@ -21,7 +22,7 @@ export async function authorizeWebSocketConnection(
 
   const row = await requests.findRequestParticipants(input.requestId);
   if (!row) {
-    return { ok: false, closeMessage: "Pedido não encontrado" };
+    return { ok: false, closeMessage: apiMessages.request.notFound };
   }
 
   const isAllowed =

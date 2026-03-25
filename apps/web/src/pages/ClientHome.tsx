@@ -312,7 +312,7 @@ const ClientHome = () => {
             {clientRequestsQuery.isLoading ? (
               <div className="text-center py-12 text-muted-foreground">Carregando...</div>
             ) : clientRequestsQuery.isError ? (
-              <div className="text-center py-12 text-muted-foreground">Nao foi possivel carregar os pedidos.</div>
+              <div className="text-center py-12 text-muted-foreground">Nao foi possível carregar os pedidos.</div>
             ) : requestedSegment === "open" ? (
               openRequests.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground rounded-xl border border-dashed border-border">
@@ -428,7 +428,7 @@ const ClientHome = () => {
                 {providersQuery.isLoading ? (
                   <div className="text-center text-muted-foreground py-8">Carregando prestadores...</div>
                 ) : providersQuery.isError ? (
-                  <div className="text-center text-muted-foreground py-8">Nao foi possivel carregar os prestadores.</div>
+                  <div className="text-center text-muted-foreground py-8">Nao foi possível carregar os prestadores.</div>
                 ) : (providersQuery.data?.length ?? 0) === 0 ? (
                   <div className="text-center text-muted-foreground py-8">Nenhum prestador no raio informado.</div>
                 ) : (
@@ -545,9 +545,9 @@ const ClientHome = () => {
           <div className="space-y-4">
             <h2 className="font-display text-xl font-bold text-foreground">Serviços Realizados</h2>
             {historyQuery.isLoading ? (
-              <div className="text-center py-12 text-muted-foreground">Carregando historico...</div>
+              <div className="text-center py-12 text-muted-foreground">Carregando histórico...</div>
             ) : historyQuery.isError ? (
-              <div className="text-center py-12 text-muted-foreground">Nao foi possivel carregar o historico.</div>
+              <div className="text-center py-12 text-muted-foreground">Não foi possível carregar o histórico.</div>
             ) : completedServices.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">Nenhum serviço finalizado ainda.</div>
             ) : (

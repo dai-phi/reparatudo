@@ -7,6 +7,7 @@ import type { IRealtimeBroadcaster } from "../../domain/ports/realtime-broadcast
 import type { ServiceId } from "../../domain/value-objects/service-id.js";
 import { SERVICE_LABELS } from "../../domain/value-objects/service-id.js";
 import { formatRelativeTime, formatTime } from "../utils/format.js";
+import { apiMessages, NO_DESCRIPTION } from "../../domain/value-objects/messages.js";
 
 export const EVENT_CHAT_MESSAGE = "chat.message";
 export const EVENT_REQUEST_UPDATED = "request.updated";
@@ -36,7 +37,7 @@ export async function listMessagesForRequest(
   role: Role
 ) {
   const target = await requests.ensureParticipant(requestId, userId, role);
-  if (!target) return { error: { status: 404, message: "Pedido nao encontrado" } as const };
+  if (!target) return { error: { status: 404, message: apiMessages.request.notFound } as const };
   const rows = await requests.listMessages(target.id);
   return {
     ok: rows.map((msg) => ({
@@ -54,11 +55,11 @@ export async function sendMessage(
 ) {
   const target = await deps.requests.ensureParticipant(params.requestId, params.userId, params.role);
   if (!target) {
-    return { error: { status: 404, message: "Pedido nao encontrado" } as const };
+    return { error: { status: 404, message: apiMessages.request.notFound } as const };
   }
 
   if (["completed", "cancelled", "rejected"].includes(target.status)) {
-    return { error: { status: 400, message: "Conversa encerrada" } as const };
+    return { error: { status: 400, message: apiMessages.chat.closed } as const };
   }
 
   const now = new Date().toISOString();
@@ -98,20 +99,20 @@ export async function createRequest(
 ): Promise<{ requestId: string } | Failure> {
   const clientName = await deps.users.getClientNameById(input.clientId);
   if (!clientName) {
-    return { status: 404, message: "Cliente nao encontrado" };
+    return { status: 404, message: apiMessages.user.notFound };
   }
 
   const provider = await deps.users.findProviderForService(input.providerId, input.serviceId);
   if (!provider) {
-    return { status: 404, message: "Prestador nao encontrado" };
+    return { status: 404, message: apiMessages.provider.notFound };
   }
 
   const clientCoords = await deps.users.getClientCoords(input.clientId);
   if (!clientCoords) {
-    return { status: 400, message: "CEP do cliente nao cadastrado" };
+    return { status: 400, message: apiMessages.client.cepNotRegistered };
   }
   if (!provider.workLat || !provider.workLng) {
-    return { status: 400, message: "CEP do prestador nao cadastrado" };
+    return { status: 400, message: apiMessages.provider.cepNotRegistered };
   }
 
   const distance = deps.geo.distanceKm(clientCoords, {
@@ -119,7 +120,7 @@ export async function createRequest(
     lng: provider.workLng,
   });
   if (!provider.radiusKm || distance > Number(provider.radiusKm)) {
-    return { status: 400, message: "Prestador fora do raio de atendimento" };
+    return { status: 400, message: apiMessages.provider.outOfRadius };
   }
 
   const now = new Date().toISOString();
@@ -154,7 +155,7 @@ export async function createRequest(
       id: requestId,
       client: clientName,
       service: serviceLabel,
-      desc: input.description?.trim() || "Sem descrição",
+      desc: input.description?.trim() || NO_DESCRIPTION,
       distance: `${distance.toFixed(1)} km`,
       time: formatRelativeTime(now),
       status: "open",
@@ -183,11 +184,11 @@ export async function acceptRequest(
 ): Promise<{ ok: true } | Failure> {
   const target = await deps.requests.findById(params.requestId);
   if (!target) {
-    return { status: 404, message: "Pedido nao encontrado" };
+    return { status: 404, message: apiMessages.request.notFound };
   }
 
   if (target.providerId != null && target.providerId !== params.providerId) {
-    return { status: 403, message: "Pedido ja atribuido" };
+    return { status: 403, message: apiMessages.request.alreadyAssigned };
   }
 
   const now = new Date().toISOString();
@@ -226,7 +227,7 @@ export async function rejectRequest(
 ): Promise<{ ok: true } | Failure> {
   const target = await deps.requests.ensureParticipant(params.requestId, params.providerId, "provider");
   if (!target) {
-    return { status: 404, message: "Pedido nao encontrado" };
+    return { status: 404, message: apiMessages.request.notFound };
   }
 
   const now = new Date().toISOString();
@@ -281,7 +282,7 @@ export async function confirmRequest(
 
   const target = await deps.requests.ensureParticipant(params.requestId, params.userId, params.role);
   if (!target) {
-    return { status: 404, message: "Pedido nao encontrado" };
+    return { status: 404, message: apiMessages.request.notFound };
   }
 
   const now = new Date().toISOString();
@@ -304,7 +305,7 @@ export async function confirmRequest(
 
   const latest = await deps.requests.findById(target.id);
   if (!latest) {
-    return { status: 404, message: "Pedido nao encontrado" };
+    return { status: 404, message: apiMessages.request.notFound };
   }
 
   const formattedRequest = (await formatDetails(latest.id)) as { agreedValueLabel?: string };
@@ -361,7 +362,7 @@ export async function cancelRequest(
 > {
   const target = await deps.requests.ensureParticipant(params.requestId, params.userId, params.role);
   if (!target) {
-    return { status: 404, message: "Pedido não encontrado" };
+    return { status: 404, message: apiMessages.request.notFound };
   }
 
   const now = new Date().toISOString();
@@ -394,7 +395,7 @@ export async function cancelRequest(
 
   const updated = await deps.requests.findById(target.id);
   if (!updated) {
-    return { status: 404, message: "Pedido nao encontrado" };
+    return { status: 404, message: apiMessages.request.notFound };
   }
   const formattedRequest = await formatDetails(updated.id);
   await broadcastRequestUpdate(deps, target.id, async () => formattedRequest);
@@ -423,7 +424,7 @@ export async function completeRequest(
 > {
   const target = await deps.requests.ensureParticipant(params.requestId, params.providerId, "provider");
   if (!target) {
-    return { status: 404, message: "Pedido nao encontrado" };
+    return { status: 404, message: apiMessages.request.notFound };
   }
 
   const now = new Date().toISOString();
@@ -463,7 +464,7 @@ export async function completeRequest(
 
   const updated = await deps.requests.findById(target.id);
   if (!updated) {
-    return { status: 404, message: "Pedido nao encontrado" };
+    return { status: 404, message: apiMessages.request.notFound };
   }
   const formattedRequest = await formatDetails(updated.id);
   await broadcastRequestUpdate(deps, target.id, async () => formattedRequest);

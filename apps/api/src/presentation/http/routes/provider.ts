@@ -5,6 +5,7 @@ import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
 import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
 import { PostgresProviderRepository } from "../../../infrastructure/persistence/repository/postgres-provider-repository.js";
+import { NO_DESCRIPTION } from "../../../domain/value-objects/messages.js";
 
 const FREE_TRIAL_MONTHS = 2;
 
@@ -108,7 +109,7 @@ export async function registerProviderRoutes(
         id: row.id,
         client: row.client_name ?? "Cliente",
         service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
-        desc: row.description || "Sem descrição",
+        desc: row.description || NO_DESCRIPTION,
         distance: "2.3 km",
         time: formatRelativeTime(row.updated_at || row.created_at),
         status,
@@ -157,7 +158,7 @@ export async function registerProviderRoutes(
         id: row.id,
         client: row.client_name ?? "Cliente",
         service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
-        desc: row.description || "Sem descrição",
+        desc: row.description || NO_DESCRIPTION,
         date: formatDate(row.completed_at || row.updated_at),
         value: formatCurrency(agreedValue),
       };

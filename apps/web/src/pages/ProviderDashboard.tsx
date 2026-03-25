@@ -273,7 +273,7 @@ const ProviderDashboard = () => {
         <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-display text-lg font-bold text-foreground">
-                {activeSection === "history" ? "Historico de Pedidos Atendidos" : "Pedidos"}
+                {activeSection === "history" ? "histórico de Pedidos Atendidos" : "Pedidos"}
               </h2>
               {activeSection === "history" && (
                 <Button variant="outline" size="sm" onClick={() => setActiveSection("nearby")}>
@@ -284,9 +284,9 @@ const ProviderDashboard = () => {
             <AnimatePresence>
               {activeSection === "history" ? (
                 historyQuery.isLoading ? (
-                  <div className="text-center py-16 text-muted-foreground">Carregando historico...</div>
+                  <div className="text-center py-16 text-muted-foreground">Carregando histórico...</div>
                 ) : historyQuery.isError ? (
-                  <div className="text-center py-16 text-muted-foreground">Nao foi possivel carregar o historico.</div>
+                  <div className="text-center py-16 text-muted-foreground">Não foi possível carregar o histórico.</div>
                 ) : history.length > 0 ? history.map((item) => (
                   <motion.div
                     key={item.id}
@@ -317,7 +317,7 @@ const ProviderDashboard = () => {
               ) : requestsQuery.isLoading ? (
                 <div className="text-center py-16 text-muted-foreground">Carregando pedidos...</div>
               ) : requestsQuery.isError ? (
-                <div className="text-center py-16 text-muted-foreground">Nao foi possivel carregar os pedidos.</div>
+                <div className="text-center py-16 text-muted-foreground">Nao foi possível carregar os pedidos.</div>
               ) : prioritizedRequests.length > 0 ? (
                 <div className="space-y-6">
                   <div className="space-y-3">

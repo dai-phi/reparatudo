@@ -5,6 +5,7 @@ import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
 import { PostgresClientRepository } from "../../../infrastructure/persistence/repository/postgres-client-repository.js";
 import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
+import { NO_DESCRIPTION } from "../../../domain/value-objects/messages.js";
 
 const ratingSchema = z.object({
   requestId: z.string().min(1),
@@ -48,7 +49,7 @@ export async function registerClientRoutes(
         id: row.id,
         provider: row.provider_name ?? "Prestador",
         service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
-        desc: row.description || "Sem descrição",
+        desc: row.description || NO_DESCRIPTION,
         status: String(row.status),
         statusLabel: meta.label,
         chatOpen: meta.chatOpen,
@@ -70,7 +71,7 @@ export async function registerClientRoutes(
       id: row.id,
       provider: row.provider_name ?? "Prestador",
       service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
-      desc: row.description || "Sem descrição",
+      desc: row.description || NO_DESCRIPTION,
       date: formatDate(row.completed_at || row.updated_at),
       value: formatCurrency(Number(row.agreed_value || 0)),
       rated: Boolean(row.rating),

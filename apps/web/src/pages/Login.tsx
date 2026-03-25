@@ -52,10 +52,10 @@ const Login = () => {
             Volte e finalize seus serviços
           </h2>
           <p className="text-primary-foreground/70 text-lg">
-            Acompanhe pedidos, conversas e historico de atendimentos.
+            Acompanhe pedidos, conversas e histórico de atendimentos.
           </p>
           <div className="mt-12 space-y-4">
-            {["Chat integrado", "Historico completo", "Profissionais verificados"].map((text) => (
+            {["Chat integrado", "histórico completo", "Profissionais verificados"].map((text) => (
               <div key={text} className="flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-accent" />
                 <span className="text-primary-foreground/80">{text}</span>
