@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
@@ -14,7 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Wrench, Star, ClipboardList, DollarSign, Clock, MapPin, Bell,
-  User, LogOut, Check, X, MessageCircle
+  User, LogOut, Check, X, MessageCircle, ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -207,6 +208,15 @@ const ProviderDashboard = () => {
     { icon: DollarSign, label: "Ganhos do Mes", value: stats?.monthEarningsLabel ?? "R$ 0,00", color: "text-success" },
     { icon: Clock, label: "Tempo Medio", value: `${stats?.avgResponseMins ?? 0} min`, color: "text-accent" },
   ];
+  const verificationStatus = me?.verificationStatus ?? "unverified";
+  const verificationLabel =
+    verificationStatus === "verified"
+      ? "Prestador verificado"
+      : verificationStatus === "pending"
+        ? "Verificação em análise"
+        : verificationStatus === "rejected"
+          ? "Verificação rejeitada"
+          : "Conta não verificada";
 
   return (
     <div className="min-h-screen bg-background">
@@ -250,7 +260,12 @@ const ProviderDashboard = () => {
         {/* Welcome */}
         <div className="mb-8">
           <h1 className="font-display text-2xl font-bold text-foreground">Ola, {me?.name ?? "Profissional"}!</h1>
-          <p className="text-muted-foreground">Veja suas metricas e pedidos do dia</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <p className="text-muted-foreground">Veja suas metricas e pedidos do dia</p>
+            <Badge variant={verificationStatus === "verified" ? "default" : "secondary"} className="gap-1">
+              <ShieldCheck className="w-3 h-3" /> {verificationLabel}
+            </Badge>
+          </div>
         </div>
 
         {/* Stats grid */}

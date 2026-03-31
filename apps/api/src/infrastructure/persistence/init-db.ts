@@ -55,6 +55,7 @@ export async function initDb() {
       work_lat DOUBLE PRECISION,
       work_lng DOUBLE PRECISION,
       photo_url TEXT,
+      verification_status TEXT NOT NULL DEFAULT 'unverified' CHECK (verification_status IN ('unverified', 'pending', 'verified', 'rejected')),
       address TEXT,
       cpf TEXT,
       radius_km INTEGER,
@@ -156,6 +157,13 @@ export async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_storage_key TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_document_url TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_document_storage_key TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_selfie_url TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_selfie_storage_key TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'unverified';
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_verification_status_check;
+    ALTER TABLE users
+      ADD CONSTRAINT users_verification_status_check
+      CHECK (verification_status IN ('unverified', 'pending', 'verified', 'rejected'));
   `);
 
   await pool.query(`

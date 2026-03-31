@@ -1,6 +1,7 @@
 import { queryClient } from "./queryClient";
 
 export type Role = "client" | "provider";
+export type VerificationStatus = "unverified" | "pending" | "verified" | "rejected";
 
 export interface User {
   id: string;
@@ -12,6 +13,9 @@ export interface User {
   workCep?: string;
   workAddress?: string;
   photoUrl?: string | null;
+  verificationStatus?: VerificationStatus;
+  verificationDocumentUrl?: string | null;
+  verificationSelfieUrl?: string | null;
   address?: string;
   cpf?: string;
   radiusKm?: number;
@@ -155,6 +159,16 @@ export interface ProviderCard {
   lastServiceDistanceKm: number | null;
   lastServiceAt: string | null;
   radiusKm: number;
+  verificationStatus?: VerificationStatus;
+  isVerified?: boolean;
+}
+
+export interface ProviderVerification {
+  status: VerificationStatus;
+  documentUrl: string | null;
+  selfieUrl: string | null;
+  canSubmit: boolean;
+  isVerified: boolean;
 }
 
 export class ApiError extends Error {
@@ -474,6 +488,76 @@ export function createProviderBillingPayment(payload: {
     auth: true,
     body: payload,
   });
+}
+
+export function getProviderVerification() {
+  return apiFetch<ProviderVerification>("/provider/verification", { auth: true });
+}
+
+export async function uploadProviderVerificationDocument(file: File): Promise<{ documentUrl: string; status: VerificationStatus }> {
+  const token = getToken();
+  const form = new FormData();
+  form.append("document", file);
+
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(`${API_URL}/provider/verification/document`, {
+    method: "POST",
+    headers,
+    credentials: "include",
+    body: form,
+  });
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+    if (response.status === 401) clearAuth();
+    const message =
+      typeof payload === "object" && payload !== null && "message" in payload
+        ? String((payload as { message: unknown }).message)
+        : response.statusText || "Erro inesperado";
+    throw new ApiError(message, response.status, payload);
+  }
+  return (await response.json()) as { documentUrl: string; status: VerificationStatus };
+}
+
+export async function uploadProviderVerificationSelfie(file: File): Promise<{ selfieUrl: string; status: VerificationStatus }> {
+  const token = getToken();
+  const form = new FormData();
+  form.append("selfie", file);
+
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(`${API_URL}/provider/verification/selfie`, {
+    method: "POST",
+    headers,
+    credentials: "include",
+    body: form,
+  });
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+    if (response.status === 401) clearAuth();
+    const message =
+      typeof payload === "object" && payload !== null && "message" in payload
+        ? String((payload as { message: unknown }).message)
+        : response.statusText || "Erro inesperado";
+    throw new ApiError(message, response.status, payload);
+  }
+  return (await response.json()) as { selfieUrl: string; status: VerificationStatus };
+}
+
+export function submitProviderVerification() {
+  return apiFetch<{ status: "pending"; message: string }>("/provider/verification/submit", { method: "POST", auth: true });
 }
 
 export function createServiceRequest(payload: { serviceId: string; description?: string; providerId: string }) {

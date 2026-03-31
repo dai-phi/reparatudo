@@ -54,6 +54,13 @@ export async function registerProviderSearchRoutes(
           lastServiceDistanceKm: lastServiceKm !== null ? Number(lastServiceKm.toFixed(1)) : null,
           lastServiceAt: row.last_service_at || null,
           radiusKm: row.radius_km ? Number(row.radius_km) : 0,
+          verificationStatus:
+            row.verification_status === "pending" ||
+            row.verification_status === "verified" ||
+            row.verification_status === "rejected"
+              ? row.verification_status
+              : "unverified",
+          isVerified: row.verification_status === "verified",
         };
       })
       .filter((provider) => {

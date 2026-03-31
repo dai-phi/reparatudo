@@ -114,4 +114,53 @@ export class PostgresProviderRepository {
       ]
     );
   }
+
+  async findVerificationByProviderId(providerId: string) {
+    const result = await this.db.query(
+      `SELECT id, role, verification_status, verification_document_url, verification_document_storage_key,
+              verification_selfie_url, verification_selfie_storage_key
+       FROM users WHERE id = $1`,
+      [providerId]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async updateVerificationAssets(
+    providerId: string,
+    updates: {
+      verificationDocumentUrl?: string | null;
+      verificationDocumentStorageKey?: string | null;
+      verificationSelfieUrl?: string | null;
+      verificationSelfieStorageKey?: string | null;
+      verificationStatus?: "unverified" | "pending" | "verified" | "rejected";
+    }
+  ) {
+    const sets: string[] = [];
+    const values: Array<string | null> = [];
+    let idx = 1;
+    if (updates.verificationDocumentUrl !== undefined) {
+      sets.push(`verification_document_url = $${idx++}`);
+      values.push(updates.verificationDocumentUrl);
+    }
+    if (updates.verificationDocumentStorageKey !== undefined) {
+      sets.push(`verification_document_storage_key = $${idx++}`);
+      values.push(updates.verificationDocumentStorageKey);
+    }
+    if (updates.verificationSelfieUrl !== undefined) {
+      sets.push(`verification_selfie_url = $${idx++}`);
+      values.push(updates.verificationSelfieUrl);
+    }
+    if (updates.verificationSelfieStorageKey !== undefined) {
+      sets.push(`verification_selfie_storage_key = $${idx++}`);
+      values.push(updates.verificationSelfieStorageKey);
+    }
+    if (updates.verificationStatus !== undefined) {
+      sets.push(`verification_status = $${idx++}`);
+      values.push(updates.verificationStatus);
+    }
+    sets.push(`updated_at = $${idx++}`);
+    values.push(new Date().toISOString());
+
+    await this.db.query(`UPDATE users SET ${sets.join(", ")} WHERE id = $${idx}`, [...values, providerId]);
+  }
 }

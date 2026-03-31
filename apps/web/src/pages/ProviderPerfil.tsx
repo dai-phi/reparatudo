@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ArrowLeft, Bell, Copy, CreditCard, LogOut, QrCode, User, Wallet, Wrench } from "lucide-react";
+import { ArrowLeft, Bell, Copy, CreditCard, LogOut, QrCode, ShieldCheck, User, Wallet, Wrench } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -15,9 +16,13 @@ import {
   deleteMyProfilePhoto,
   getProviderBillingPayments,
   getProviderBillingSummary,
+  getProviderVerification,
   logout,
   setStoredUser,
+  submitProviderVerification,
   updateMe,
+  uploadProviderVerificationDocument,
+  uploadProviderVerificationSelfie,
   uploadMyProfilePhoto,
   type ProviderPaymentMethod,
   type ProviderPaymentStatus,
@@ -69,6 +74,8 @@ const ProviderPerfil = () => {
     workAddress: "",
   });
   const profilePhotoInputRef = useRef<HTMLInputElement>(null);
+  const verificationDocumentInputRef = useRef<HTMLInputElement>(null);
+  const verificationSelfieInputRef = useRef<HTMLInputElement>(null);
   const [payMethod, setPayMethod] = useState<ProviderPaymentMethod>("pix");
   const [cardLast4, setCardLast4] = useState("");
   const [lastPixPayload, setLastPixPayload] = useState<string | null>(null);
@@ -83,6 +90,12 @@ const ProviderPerfil = () => {
   const billingPaymentsQuery = useQuery({
     queryKey: ["providerBillingPayments"],
     queryFn: getProviderBillingPayments,
+    enabled: Boolean(me && me.role === "provider"),
+  });
+
+  const verificationQuery = useQuery({
+    queryKey: ["providerVerification"],
+    queryFn: getProviderVerification,
     enabled: Boolean(me && me.role === "provider"),
   });
 
@@ -164,6 +177,45 @@ const ProviderPerfil = () => {
     },
   });
 
+  const verificationDocumentUploadMutation = useMutation({
+    mutationFn: uploadProviderVerificationDocument,
+    onSuccess: () => {
+      toast.success("Documento enviado com sucesso.");
+      queryClient.invalidateQueries({ queryKey: ["providerVerification"] });
+      queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : "Nao foi possivel enviar o documento";
+      toast.error(message);
+    },
+  });
+
+  const verificationSelfieUploadMutation = useMutation({
+    mutationFn: uploadProviderVerificationSelfie,
+    onSuccess: () => {
+      toast.success("Selfie enviada com sucesso.");
+      queryClient.invalidateQueries({ queryKey: ["providerVerification"] });
+      queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : "Nao foi possivel enviar a selfie";
+      toast.error(message);
+    },
+  });
+
+  const verificationSubmitMutation = useMutation({
+    mutationFn: submitProviderVerification,
+    onSuccess: (data) => {
+      toast.success(data.message);
+      queryClient.invalidateQueries({ queryKey: ["providerVerification"] });
+      queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : "Nao foi possivel enviar para analise";
+      toast.error(message);
+    },
+  });
+
   const handleLogout = async () => {
     await logout();
     navigate("/", { replace: true });
@@ -203,6 +255,16 @@ const ProviderPerfil = () => {
   };
 
   const summary = billingSummaryQuery.data;
+  const verification = verificationQuery.data;
+  const verificationStatus = verification?.status ?? me?.verificationStatus ?? "unverified";
+  const verificationLabel =
+    verificationStatus === "verified"
+      ? "Verificado"
+      : verificationStatus === "pending"
+        ? "Em análise"
+        : verificationStatus === "rejected"
+          ? "Rejeitado"
+          : "Não verificado";
 
   return (
     <div className="min-h-screen bg-background">
@@ -284,6 +346,11 @@ const ProviderPerfil = () => {
                   <div className="text-center sm:text-left flex-1 space-y-3">
                     <div>
                       <p className="font-bold text-card-foreground">{me?.name ?? "Profissional"}</p>
+                      <div className="mt-1">
+                        <Badge variant={verificationStatus === "verified" ? "default" : "secondary"} className="gap-1">
+                          <ShieldCheck className="h-3 w-3" /> {verificationLabel}
+                        </Badge>
+                      </div>
                       <p className="text-sm text-muted-foreground break-all">{me?.email ?? "email@exemplo.com"}</p>
                     </div>
                     <div className="flex flex-wrap justify-center sm:justify-start gap-2">
@@ -371,6 +438,94 @@ const ProviderPerfil = () => {
                     Salvar alterações
                   </Button>
                 </div>
+              </div>
+
+              <div className="rounded-xl bg-card shadow-card p-4 sm:p-6 space-y-4 sm:max-w-2xl">
+                <h2 className="font-display text-xl font-semibold text-card-foreground">Verificação de prestador</h2>
+                <p className="text-sm text-muted-foreground">
+                  Envie um documento e uma selfie para solicitar o selo de prestador verificado.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Badge variant={verificationStatus === "verified" ? "default" : "secondary"} className="gap-1">
+                    <ShieldCheck className="h-3 w-3" /> {verificationLabel}
+                  </Badge>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Documento (RG/CNH)</Label>
+                    <input
+                      ref={verificationDocumentInputRef}
+                      type="file"
+                      accept={ACCEPT_PROFILE_IMAGES}
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        if (f) verificationDocumentUploadMutation.mutate(f);
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => verificationDocumentInputRef.current?.click()}
+                      disabled={verificationDocumentUploadMutation.isPending}
+                    >
+                      {verificationDocumentUploadMutation.isPending
+                        ? "Enviando documento..."
+                        : verification?.documentUrl
+                          ? "Trocar documento"
+                          : "Enviar documento"}
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Selfie com documento</Label>
+                    <input
+                      ref={verificationSelfieInputRef}
+                      type="file"
+                      accept={ACCEPT_PROFILE_IMAGES}
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        if (f) verificationSelfieUploadMutation.mutate(f);
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => verificationSelfieInputRef.current?.click()}
+                      disabled={verificationSelfieUploadMutation.isPending}
+                    >
+                      {verificationSelfieUploadMutation.isPending
+                        ? "Enviando selfie..."
+                        : verification?.selfieUrl
+                          ? "Trocar selfie"
+                          : "Enviar selfie"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p>Documento: {verification?.documentUrl ? "enviado" : "pendente"}</p>
+                  <p>Selfie: {verification?.selfieUrl ? "enviada" : "pendente"}</p>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="hero"
+                  disabled={
+                    verificationSubmitMutation.isPending ||
+                    !verification?.canSubmit ||
+                    verificationStatus === "pending" ||
+                    verificationStatus === "verified"
+                  }
+                  onClick={() => verificationSubmitMutation.mutate()}
+                >
+                  {verificationSubmitMutation.isPending ? "Enviando..." : "Solicitar verificação"}
+                </Button>
               </div>
             </TabsContent>
 

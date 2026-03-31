@@ -15,7 +15,9 @@ export interface UserRecord {
   workLng: number | null;
   workAddress: string | null;
   photoUrl: string | null;
+  verificationStatus?: "unverified" | "pending" | "verified" | "rejected";
   verificationDocumentUrl?: string | null;
+  verificationSelfieUrl?: string | null;
   address: string | null;
   cpf: string | null;
   radiusKm: number | null;

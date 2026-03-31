@@ -6,6 +6,10 @@ import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/form
 import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
 import { PostgresProviderRepository } from "../../../infrastructure/persistence/repository/postgres-provider-repository.js";
 import { NO_DESCRIPTION } from "../../../domain/value-objects/messages.js";
+import { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
+import { destroyPublicIdIfAny } from "../utils/cloudinary-helpers.js";
+import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
+import { getHttpStatusFromError, serializeUnknownError } from "../utils/serialize-error.js";
 
 const FREE_TRIAL_MONTHS = 2;
 
@@ -62,6 +66,8 @@ const createPaymentSchema = z.object({
   paymentMethod: z.enum(["pix", "cartao_credito", "cartao_debito"]),
   cardLastFour: z.string().regex(/^\d{4}$/).optional(),
 });
+
+const verificationStatusSchema = z.enum(["unverified", "pending", "verified", "rejected"]);
 
 function providerRequestStatusLabel(status: string): string {
   switch (status) {
@@ -324,5 +330,171 @@ export async function registerProviderRoutes(
       pixCopyPaste,
       cardLastFour: paymentMethod === "pix" ? null : cardLastFour ?? null,
     });
+  });
+
+  app.get("/provider/verification", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "provider") {
+      return reply.code(403).send({ message: "Acesso negado" });
+    }
+    const row = await providers.findVerificationByProviderId(request.user.sub);
+    if (!row) {
+      return reply.code(404).send({ message: "Usuario nao encontrado" });
+    }
+    if (row.role !== "provider") {
+      return reply.code(403).send({ message: "Acesso negado" });
+    }
+    const status = verificationStatusSchema.parse(row.verification_status ?? "unverified");
+    return reply.send({
+      status,
+      documentUrl: row.verification_document_url ?? null,
+      selfieUrl: row.verification_selfie_url ?? null,
+      canSubmit: Boolean(row.verification_document_url && row.verification_selfie_url),
+      isVerified: status === "verified",
+    });
+  });
+
+  app.post("/provider/verification/document", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "provider") {
+      return reply.code(403).send({ message: "Acesso negado" });
+    }
+    const row = await providers.findVerificationByProviderId(request.user.sub);
+    if (!row) {
+      return reply.code(404).send({ message: "Usuario nao encontrado" });
+    }
+    const file = await request.file();
+    if (!file || file.fieldname !== "document") {
+      return reply.code(400).send({ message: 'Envie uma imagem no campo "document".' });
+    }
+
+    let buffer: Buffer;
+    try {
+      buffer = await file.toBuffer();
+    } catch (e) {
+      const code = getHttpStatusFromError(e) ?? 413;
+      return reply.code(code).send({ message: "Imagem muito grande ou inválida." });
+    }
+
+    try {
+      assertProviderImageMime(file.mimetype);
+      assertProviderImageSize(buffer.length);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Imagem inválida";
+      return reply.code(400).send({ message: msg });
+    }
+
+    let cloudinary: CloudinaryService;
+    try {
+      cloudinary = new CloudinaryService();
+    } catch {
+      return reply.code(500).send({ message: "Serviço de imagens não configurado." });
+    }
+
+    await destroyPublicIdIfAny(cloudinary, row.verification_document_storage_key ?? null);
+
+    let uploaded;
+    try {
+      uploaded = await cloudinary.uploadBuffer(buffer, {
+        folder: "teu-faz-tudo",
+        public_id: `verification/document-${request.user.sub}`,
+        overwrite: true,
+        resource_type: "image",
+      });
+    } catch (e) {
+      return reply.code(502).send({ message: serializeUnknownError(e) });
+    }
+
+    const parsedStatus = verificationStatusSchema.parse(row.verification_status ?? "unverified");
+    await providers.updateVerificationAssets(request.user.sub, {
+      verificationDocumentUrl: uploaded.secure_url,
+      verificationDocumentStorageKey: uploaded.public_id,
+      verificationStatus: parsedStatus === "rejected" ? "unverified" : parsedStatus,
+    });
+
+    return reply.code(201).send({
+      documentUrl: uploaded.secure_url,
+      status: parsedStatus === "rejected" ? "unverified" : parsedStatus,
+    });
+  });
+
+  app.post("/provider/verification/selfie", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "provider") {
+      return reply.code(403).send({ message: "Acesso negado" });
+    }
+    const row = await providers.findVerificationByProviderId(request.user.sub);
+    if (!row) {
+      return reply.code(404).send({ message: "Usuario nao encontrado" });
+    }
+    const file = await request.file();
+    if (!file || file.fieldname !== "selfie") {
+      return reply.code(400).send({ message: 'Envie uma imagem no campo "selfie".' });
+    }
+
+    let buffer: Buffer;
+    try {
+      buffer = await file.toBuffer();
+    } catch (e) {
+      const code = getHttpStatusFromError(e) ?? 413;
+      return reply.code(code).send({ message: "Imagem muito grande ou inválida." });
+    }
+
+    try {
+      assertProviderImageMime(file.mimetype);
+      assertProviderImageSize(buffer.length);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Imagem inválida";
+      return reply.code(400).send({ message: msg });
+    }
+
+    let cloudinary: CloudinaryService;
+    try {
+      cloudinary = new CloudinaryService();
+    } catch {
+      return reply.code(500).send({ message: "Serviço de imagens não configurado." });
+    }
+
+    await destroyPublicIdIfAny(cloudinary, row.verification_selfie_storage_key ?? null);
+
+    let uploaded;
+    try {
+      uploaded = await cloudinary.uploadBuffer(buffer, {
+        folder: "teu-faz-tudo",
+        public_id: `verification/selfie-${request.user.sub}`,
+        overwrite: true,
+        resource_type: "image",
+      });
+    } catch (e) {
+      return reply.code(502).send({ message: serializeUnknownError(e) });
+    }
+
+    const parsedStatus = verificationStatusSchema.parse(row.verification_status ?? "unverified");
+    await providers.updateVerificationAssets(request.user.sub, {
+      verificationSelfieUrl: uploaded.secure_url,
+      verificationSelfieStorageKey: uploaded.public_id,
+      verificationStatus: parsedStatus === "rejected" ? "unverified" : parsedStatus,
+    });
+
+    return reply.code(201).send({
+      selfieUrl: uploaded.secure_url,
+      status: parsedStatus === "rejected" ? "unverified" : parsedStatus,
+    });
+  });
+
+  app.post("/provider/verification/submit", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "provider") {
+      return reply.code(403).send({ message: "Acesso negado" });
+    }
+    const row = await providers.findVerificationByProviderId(request.user.sub);
+    if (!row) {
+      return reply.code(404).send({ message: "Usuario nao encontrado" });
+    }
+    const status = verificationStatusSchema.parse(row.verification_status ?? "unverified");
+    if (!row.verification_document_url || !row.verification_selfie_url) {
+      return reply.code(400).send({ message: "Envie documento e selfie antes de solicitar verificação." });
+    }
+    if (status === "verified") {
+      return reply.code(400).send({ message: "Sua conta já está verificada." });
+    }
+    await providers.updateVerificationAssets(request.user.sub, { verificationStatus: "pending" });
+    return reply.send({ status: "pending" as const, message: "Verificação enviada para análise." });
   });
 }

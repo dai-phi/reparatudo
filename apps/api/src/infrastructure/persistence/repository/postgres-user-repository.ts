@@ -21,8 +21,16 @@ function mapUserRow(row: Record<string, unknown>): UserRecord {
     workLng: row.work_lng != null ? Number(row.work_lng) : null,
     workAddress: row.work_address != null ? String(row.work_address) : null,
     photoUrl: row.photo_url != null ? String(row.photo_url) : null,
+    verificationStatus:
+      row.verification_status === "pending" ||
+      row.verification_status === "verified" ||
+      row.verification_status === "rejected"
+        ? row.verification_status
+        : "unverified",
     verificationDocumentUrl:
       row.verification_document_url != null ? String(row.verification_document_url) : null,
+    verificationSelfieUrl:
+      row.verification_selfie_url != null ? String(row.verification_selfie_url) : null,
     address: row.address != null ? String(row.address) : null,
     cpf: row.cpf != null ? String(row.cpf) : null,
     radiusKm: row.radius_km != null ? Number(row.radius_km) : null,

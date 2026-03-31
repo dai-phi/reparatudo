@@ -12,7 +12,7 @@ export class PostgresProviderSearchRepository {
 
   async listProvidersByService(serviceId: ServiceId) {
     const result = await this.db.query(
-      `SELECT u.id, u.name, u.photo_url, u.radius_km, u.work_lat, u.work_lng,
+      `SELECT u.id, u.name, u.photo_url, u.radius_km, u.work_lat, u.work_lng, u.verification_status,
               u.last_service_lat, u.last_service_lng, u.last_service_at,
               COALESCE(AVG(r.rating), 0) as rating_avg,
               COALESCE(AVG(EXTRACT(EPOCH FROM (req.accepted_at - req.created_at)) / 60), 9999) as avg_response

@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Wrench, Zap, Droplets, PaintBucket, Hammer, User, Bell, LogOut,
-  Search, ArrowRight, Loader2, ClipboardList, Star, MessageSquare,
+  Search, ArrowRight, Loader2, ClipboardList, Star, MessageSquare, ShieldCheck,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -534,7 +534,14 @@ const ClientHome = () => {
                             </div>
                           )}
                           <div className="flex-1">
-                            <p className="font-semibold text-card-foreground">{provider.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-card-foreground">{provider.name}</p>
+                              {provider.isVerified && (
+                                <Badge variant="default" className="gap-1 px-2 py-0 text-[10px]">
+                                  <ShieldCheck className="w-3 h-3" /> Verificado
+                                </Badge>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <Star className="w-4 h-4 text-warning fill-warning" />
                               {provider.rating.toFixed(1)} • Tempo médio: {avgLabel}
