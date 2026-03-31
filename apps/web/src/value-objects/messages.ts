@@ -5,22 +5,22 @@ export const UI_MESSAGES = {
     rejected: "Pedido recusado.",
     cancelled: "Atendimento cancelado.",
     completed: "Atendimento finalizado com sucesso.",
-    confirmedService: "Serviço confirmado!",
+    confirmedService: "Servico confirmado!",
     createdAndWaitingProvider: "Pedido enviado! Aguardando o aceite do prestador.",
     providerRejectedOrCancelled: "Prestador recusou ou cancelou o pedido.",
-    completedAndRatePrompt: "Serviço finalizado! Avalie o prestador abaixo (opcional).",
+    completedAndRatePrompt: "Servico finalizado! Avalie o prestador abaixo (opcional).",
     waitingProviderResponse: "Aguardando resposta do prestador",
-    providerNameLoading: "Carregando prestador…",
-    viewInRequestedServices: "Ver em Serviços Solicitados",
+    providerNameLoading: "Carregando prestador...",
+    viewInRequestedServices: "Ver em Servicos Solicitados",
     cancelPendingRequest: "Cancelar pedido",
     cancelPendingConfirmTitle: "Cancelar este pedido?",
     cancelPendingConfirmDescription:
-      "O pedido deixará de ficar em aberto e o prestador será notificado. Pode solicitar outro serviço depois.",
-    pendingRedirectHint: "Quando o prestador aceitar, você será levado ao chat automaticamente.",
+      "O pedido deixara de ficar em aberto e o prestador sera notificado. Pode solicitar outro servico depois.",
+    pendingRedirectHint: "Quando o prestador aceitar, voce sera levado ao chat automaticamente.",
   },
   chat: {
-    serviceCancelled: "Serviço cancelado.",
-    serviceCompleted: "Serviço finalizado!",
+    serviceCancelled: "Servico cancelado.",
+    serviceCompleted: "Servico finalizado!",
   },
   auth: {
     loginSuccess: "Login realizado!",
@@ -39,35 +39,39 @@ export const UI_MESSAGES = {
   },
   billing: {
     paymentRegistered: "Pagamento registrado com sucesso!",
-    pixCodeCopied: "Código copiado!",
+    pixCodeCopied: "Codigo copiado!",
+  },
+  plans: {
+    purchaseCompleted: "Plano registrado com sucesso!",
+    pixCodeCopied: "Codigo PIX copiado!",
   },
   validation: {
-    selectService: "Selecione um serviço",
+    selectService: "Selecione um servico",
     selectRating: "Selecione uma nota",
   },
 } as const;
 
 export const UI_ERRORS = {
   request: {
-    accept: "Não foi possível aceitar o pedido",
-    reject: "Não foi possível recusar o pedido",
-    complete: "Não foi possível finalizar o atendimento",
-    cancel: "Não foi possível cancelar o atendimento",
-    confirm: "Não foi possível confirmar o serviço",
-    create: "Não foi possível criar o pedido",
+    accept: "Nao foi possivel aceitar o pedido",
+    reject: "Nao foi possivel recusar o pedido",
+    complete: "Nao foi possivel finalizar o atendimento",
+    cancel: "Nao foi possivel cancelar o atendimento",
+    confirm: "Nao foi possivel confirmar o servico",
+    create: "Nao foi possivel criar o pedido",
   },
   chat: {
-    sendMessage: "Não foi possível enviar a mensagem",
-    confirmService: "Não foi possível confirmar o serviço",
-    cancelService: "Não foi possível cancelar o serviço",
-    completeService: "Não foi possível finalizar o serviço",
+    sendMessage: "Nao foi possivel enviar a mensagem",
+    confirmService: "Nao foi possivel confirmar o servico",
+    cancelService: "Nao foi possivel cancelar o servico",
+    completeService: "Nao foi possivel finalizar o servico",
   },
   auth: {
-    login: "Não foi possível entrar",
-    register: "Não foi possível concluir o cadastro",
+    login: "Nao foi possivel entrar",
+    register: "Nao foi possivel concluir o cadastro",
   },
   profile: {
-    update: "Não foi possível atualizar o perfil",
+    update: "Nao foi possivel atualizar o perfil",
   },
   rating: {
     submit: "Não foi possível enviar a avaliação",
@@ -77,7 +81,11 @@ export const UI_ERRORS = {
     submit: "Não foi possível reportar o problema",
   },
   billing: {
-    pay: "Não foi possível concluir o pagamento",
-    copyPix: "Não foi possível copiar",
+    pay: "Nao foi possivel concluir o pagamento",
+    copyPix: "Nao foi possivel copiar",
+  },
+  plans: {
+    purchase: "Nao foi possivel concluir a compra do plano",
+    copyPix: "Nao foi possivel copiar o codigo PIX",
   },
 } as const;

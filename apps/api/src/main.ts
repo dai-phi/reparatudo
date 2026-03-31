@@ -33,7 +33,7 @@ await app.register(cors, {
   origin: true,
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Admin-Key"],
 });
 
 await app.register(cookie, {
@@ -75,7 +75,7 @@ app.get("/health", async () => ({ status: "ok" }));
 await initDb();
 
 await registerAuthRoutes(app, { users, geo, passwordHasher });
-await registerMeRoutes(app, profiles, users);
+await registerMeRoutes(app, profiles, users, providers);
 await registerClientRoutes(app, clients);
 await registerProviderRoutes(app, providers);
 await registerRequestRoutes(app, { users, requests, geo, realtime, email });

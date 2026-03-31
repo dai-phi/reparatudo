@@ -25,45 +25,15 @@ function monthlyFeeBrl(): number {
 function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
+import {
+  PROVIDER_PLAN_IDS,
+  PROVIDER_PLAN_PAYMENT_METHODS,
+  type ProviderPlanId,
+} from "../../../domain/value-objects/provider-plan.js";
 
-function addMonths(d: Date, n: number): Date {
-  const x = new Date(d);
-  x.setMonth(x.getMonth() + n);
-  return x;
-}
-
-function monthKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}-01`;
-}
-
-function monthKeyFromDb(raw: unknown): string {
-  if (raw == null) return "";
-  if (raw instanceof Date) {
-    return monthKey(startOfMonth(raw));
-  }
-  const s = String(raw).slice(0, 10);
-  const parts = s.split("-");
-  if (parts.length >= 2) {
-    return `${parts[0]}-${parts[1].padStart(2, "0")}-01`;
-  }
-  return s;
-}
-
-function monthsRangeInclusive(from: Date, to: Date): Date[] {
-  const out: Date[] = [];
-  let cur = startOfMonth(from);
-  const end = startOfMonth(to);
-  while (cur <= end) {
-    out.push(new Date(cur));
-    cur = addMonths(cur, 1);
-  }
-  return out;
-}
-
-const createPaymentSchema = z.object({
-  paymentMethod: z.enum(["pix", "cartao_credito", "cartao_debito"]),
+const createPlanPurchaseSchema = z.object({
+  planId: z.enum(PROVIDER_PLAN_IDS),
+  paymentMethod: z.enum(PROVIDER_PLAN_PAYMENT_METHODS),
   cardLastFour: z.string().regex(/^\d{4}$/).optional(),
 });
 
@@ -83,7 +53,7 @@ function hasKycAdminAccess(headers: Record<string, unknown>): boolean {
   if (!expected || expected.trim() === "") return false;
   const headerValue = headers["x-admin-key"];
   if (typeof headerValue !== "string") return false;
-  return headerValue === expected;
+  return headerValue.trim() === expected.trim();
 }
 
 function providerRequestStatusLabel(status: string): string {
@@ -102,15 +72,97 @@ function providerRequestStatusLabel(status: string): string {
 function providerPendingStepLabel(status: string, providerConfirmed: boolean, clientConfirmed: boolean): string | null {
   if (status !== StatusEnum.ACCEPTED) return null;
   if (providerConfirmed && !clientConfirmed) {
-    return "Voce já confirmou o serviço. Aguardando o cliente.";
+    return "Voce ja confirmou o servico. Aguardando o cliente.";
   }
   if (!providerConfirmed && clientConfirmed) {
-    return "Cliente ja confirmou o serviço. Falta sua confirmação.";
+    return "Cliente ja confirmou o servico. Falta sua confirmacao.";
   }
   if (!providerConfirmed && !clientConfirmed) {
-    return "Serviço aceito. Falta confirmar com o cliente.";
+    return "Servico aceito. Falta confirmar com o cliente.";
   }
   return null;
+}
+
+function buildPlanPayload(row: Record<string, unknown>, currentPlanId: string | null) {
+  const planId = String(row.id);
+  const price = Number(row.price || 0);
+
+  return {
+    id: planId,
+    code: String(row.code),
+    name: String(row.name),
+    description: String(row.description),
+    price,
+    priceLabel: formatCurrency(price),
+    billingCycleDays: Number(row.billing_cycle_days || 30),
+    features: Array.isArray(row.features) ? row.features.map((feature) => String(feature)) : [],
+    isCurrent: currentPlanId === planId,
+  };
+}
+
+function buildCurrentSubscriptionPayload(row: Record<string, unknown> | null) {
+  if (!row) return null;
+
+  const price = Number(row.price || 0);
+  const startsAt = String(row.starts_at);
+  const expiresAt = String(row.expires_at);
+  const diffMs = new Date(expiresAt).getTime() - Date.now();
+  const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+  return {
+    id: String(row.id),
+    providerId: String(row.provider_id),
+    planId: String(row.plan_id),
+    planCode: String(row.plan_code),
+    planName: String(row.plan_name),
+    planDescription: String(row.plan_description),
+    status: String(row.status),
+    startsAt,
+    startsAtLabel: formatDate(startsAt),
+    expiresAt,
+    expiresAtLabel: formatDate(expiresAt),
+    daysRemaining,
+    price,
+    priceLabel: formatCurrency(price),
+    billingCycleDays: Number(row.billing_cycle_days || 30),
+    features: Array.isArray(row.features) ? row.features.map((feature) => String(feature)) : [],
+  };
+}
+
+function buildPlanPaymentPayload(row: Record<string, unknown>) {
+  const amount = Number(row.amount || 0);
+  const paidAt = row.paid_at ? String(row.paid_at) : null;
+  const coverageStartsAt = String(row.coverage_starts_at);
+  const coverageEndsAt = String(row.coverage_ends_at);
+
+  return {
+    id: String(row.id),
+    providerId: String(row.provider_id),
+    planId: String(row.plan_id),
+    planCode: String(row.plan_code),
+    planName: String(row.plan_name),
+    subscriptionId: String(row.subscription_id),
+    amount,
+    amountLabel: formatCurrency(amount),
+    currency: String(row.currency || "BRL"),
+    paymentMethod: String(row.payment_method),
+    status: String(row.status),
+    coverageStartsAt,
+    coverageStartsAtLabel: formatDate(coverageStartsAt),
+    coverageEndsAt,
+    coverageEndsAtLabel: formatDate(coverageEndsAt),
+    paidAt,
+    paidAtLabel: paidAt ? formatDate(paidAt) : null,
+    pixCopyPaste: row.pix_copy_paste ? String(row.pix_copy_paste) : null,
+    cardLastFour: row.card_last_four ? String(row.card_last_four) : null,
+    mockTransactionId: String(row.mock_transaction_id),
+    createdAt: String(row.created_at),
+  };
+}
+
+function buildMockPixCopyPaste(planId: ProviderPlanId, amount: number, transactionId: string) {
+  const amountInCents = Math.round(amount * 100);
+  return `PIX|MOCK|plan=${planId}|amount=${amountInCents}|tx=${transactionId}`;
 }
 
 export async function registerProviderRoutes(
@@ -128,6 +180,7 @@ export async function registerProviderRoutes(
       const status = String(row.status);
       const providerConfirmed = Boolean(row.provider_confirmed);
       const clientConfirmed = Boolean(row.client_confirmed);
+
       return {
         id: row.id,
         client: row.client_name ?? "Cliente",
@@ -222,163 +275,103 @@ export async function registerProviderRoutes(
     return reply.send({ ok: true });
   });
 
+    app.get("/provider/plans", { preHandler: [app.authenticate] }, async (request, reply) => {
+        if (request.user.role !== "provider") {
+            return reply.code(403).send({ message: "Acesso negado" });
+        }
+
+        const currentAt = new Date().toISOString();
+        await providers.refreshExpiredPlanSubscriptions(request.user.sub, currentAt);
+
+        const [plans, currentSubscription] = await Promise.all([
+            providers.listPlans(),
+            providers.findCurrentPlanSubscription(request.user.sub),
+        ]);
+
+        return reply.send({
+            plans: plans.map((plan) => buildPlanPayload(plan, currentSubscription ? String(currentSubscription.plan_id) : null)),
+            currentSubscription: buildCurrentSubscriptionPayload(currentSubscription),
+        });
+    });
   app.get("/provider/billing/summary", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "provider") {
       return reply.code(403).send({ message: "Acesso negado" });
     }
 
-    const row = await providers.findProviderCreatedAt(request.user.sub);
-    if (!row) {
-      return reply.code(404).send({ message: "Usuario nao encontrado" });
-    }
+    const currentAt = new Date().toISOString();
+    await providers.refreshExpiredPlanSubscriptions(request.user.sub, currentAt);
 
-    const createdAt = new Date(row.created_at);
-    const freeEndsAt = addMonths(createdAt, FREE_TRIAL_MONTHS);
-    const now = new Date();
-    const inFreePeriod = now < freeEndsAt;
+    const [plans, currentSubscription] = await Promise.all([
+      providers.listPlans(),
+      providers.findCurrentPlanSubscription(request.user.sub),
+    ]);
 
-    const paidResult = await providers.listPaidReferenceMonths(request.user.sub);
-    const paidSet = new Set<string>(paidResult.map((r) => monthKeyFromDb(r.k)));
-
-    const unpaidMonths: { referenceMonth: string; label: string }[] = [];
-    if (!inFreePeriod) {
-      const firstBillMonth = startOfMonth(freeEndsAt);
-      const currentMonth = startOfMonth(now);
-      for (const m of monthsRangeInclusive(firstBillMonth, currentMonth)) {
-        const key = monthKey(m);
-        if (!paidSet.has(key)) {
-          unpaidMonths.push({
-            referenceMonth: key,
-            label: new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(m),
-          });
-        }
-      }
-    }
-
-    const fee = monthlyFeeBrl();
     return reply.send({
-      monthlyFee: fee,
-      monthlyFeeLabel: formatCurrency(fee),
-      freeTrialMonths: FREE_TRIAL_MONTHS,
-      freeEndsAt: freeEndsAt.toISOString(),
-      inFreePeriod,
-      freeEndsAtLabel: formatDate(freeEndsAt.toISOString()),
-      unpaidMonths,
-      hasOutstanding: unpaidMonths.length > 0,
+      plans: plans.map((plan) => buildPlanPayload(plan, currentSubscription ? String(currentSubscription.plan_id) : null)),
+      currentSubscription: buildCurrentSubscriptionPayload(currentSubscription),
     });
   });
 
-  app.get("/provider/billing/payments", { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.get("/provider/plans/payments", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "provider") {
       return reply.code(403).send({ message: "Acesso negado" });
     }
 
-    const result = await providers.listPayments(request.user.sub);
+    const currentAt = new Date().toISOString();
+    await providers.refreshExpiredPlanSubscriptions(request.user.sub, currentAt);
 
-    const items = result.map((r) => {
-      const amount = Number(r.amount);
-      return {
-        id: r.id,
-        amount,
-        amountLabel: formatCurrency(amount),
-        paymentMethod: r.payment_method as "pix" | "cartao_credito" | "cartao_debito",
-        status: r.status as "pending" | "paid" | "cancelled",
-        referenceMonth: r.reference_month,
-        referenceMonthLabel: new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(r.reference_month)),
-        paidAt: r.paid_at,
-        paidAtLabel: formatDate(r.paid_at),
-        pixCopyPaste: r.pix_copy_paste ?? null,
-        cardLastFour: r.card_last_four ?? null,
-        createdAt: r.created_at,
-      };
-    });
-
-    return reply.send(items);
+    const result = await providers.listPlanPayments(request.user.sub);
+    return reply.send(result.map((row) => buildPlanPaymentPayload(row)));
   });
 
-  app.post("/provider/billing/payments", { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post("/provider/plans/subscribe", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "provider") {
       return reply.code(403).send({ message: "Acesso negado" });
     }
 
-    const parsed = createPaymentSchema.safeParse(request.body);
+    const parsed = createPlanPurchaseSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ message: "Dados invalidos", issues: parsed.error.flatten() });
     }
 
-    const { paymentMethod, cardLastFour } = parsed.data;
-    if ((paymentMethod === "cartao_credito" || paymentMethod === "cartao_debito") && !cardLastFour) {
+    const { planId, paymentMethod, cardLastFour } = parsed.data;
+    if ((paymentMethod === "credit_card" || paymentMethod === "debit_card") && !cardLastFour) {
       return reply.code(400).send({ message: "Informe os ultimos 4 digitos do cartao" });
     }
 
-    const urow = await providers.findProviderCreatedAt(request.user.sub);
-    if (!urow) {
-      return reply.code(404).send({ message: "Usuario nao encontrado" });
+    const plan = await providers.findPlanById(planId);
+    if (!plan) {
+      return reply.code(404).send({ message: "Plano nao encontrado" });
     }
 
-    const createdAt = new Date(urow.created_at);
-    const freeEndsAt = addMonths(createdAt, FREE_TRIAL_MONTHS);
-    const now = new Date();
-    if (now < freeEndsAt) {
-      return reply.code(400).send({ message: "Voce ainda esta no periodo gratuito. Não e necessario pagar." });
-    }
+    const currentAt = new Date().toISOString();
+    const transactionId = randomUUID();
+    const amount = Number(plan.price || 0);
+    const pixCopyPaste = paymentMethod === "pix" ? buildMockPixCopyPaste(planId, amount, transactionId) : null;
 
-    const paidResult = await providers.listPaidReferenceMonthsRaw(request.user.sub);
-    const paidSet = new Set<string>(paidResult.map((r) => monthKeyFromDb(r.reference_month)));
+    try {
+      const result = await providers.purchasePlan({
+        providerId: request.user.sub,
+        planId,
+        paymentMethod,
+        cardLastFour: paymentMethod === "pix" ? null : cardLastFour ?? null,
+        pixCopyPaste,
+        mockTransactionId: transactionId,
+        currentAt,
+      });
 
-    const firstBillMonth = startOfMonth(freeEndsAt);
-    const currentMonth = startOfMonth(now);
-    let targetMonth: Date | null = null;
-    for (const m of monthsRangeInclusive(firstBillMonth, currentMonth)) {
-      const key = monthKey(m);
-      if (!paidSet.has(key)) {
-        targetMonth = m;
-        break;
+      return reply.code(201).send({
+        currentSubscription: buildCurrentSubscriptionPayload(result.subscription),
+        payment: result.payment ? buildPlanPaymentPayload(result.payment) : null,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "PROVIDER_PLAN_NOT_FOUND") {
+        return reply.code(404).send({ message: "Plano nao encontrado" });
       }
+
+      request.log.error(error);
+      return reply.code(500).send({ message: "Nao foi possivel processar a compra do plano" });
     }
-
-    if (!targetMonth) {
-      return reply.code(400).send({ message: "Não ha mensalidade em aberto no momento." });
-    }
-
-    const id = randomUUID();
-    const ts = now.toISOString();
-    const competenciaKey = monthKey(targetMonth);
-    const fee = monthlyFeeBrl();
-    const feeCents = Math.round(fee * 100);
-
-    let pixCopyPaste: string | null = null;
-    if (paymentMethod === "pix") {
-      const payload = `00020126580014br.gov.bcb.pix0136${randomUUID().replace(/-/g, "")}520400005303986540${String(feeCents).padStart(10, "0")}5802BR5925REP TUDO SISTEMAS6009SAO PAULO62070503***6304`;
-      pixCopyPaste = payload.slice(0, 180);
-    }
-
-    await providers.insertPayment({
-      id,
-      providerId: request.user.sub,
-      amount: fee,
-      paymentMethod,
-      referenceMonth: competenciaKey,
-      paidAt: ts,
-      pixCopyPaste,
-      cardLastFour: paymentMethod === "pix" ? null : cardLastFour ?? null,
-      createdAt: ts,
-      updatedAt: ts,
-    });
-
-    return reply.code(201).send({
-      id,
-      amount: fee,
-      amountLabel: formatCurrency(fee),
-      paymentMethod,
-      status: "paid" as const,
-      referenceMonth: competenciaKey,
-      referenceMonthLabel: new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(targetMonth),
-      paidAt: ts,
-      paidAtLabel: formatDate(ts),
-      pixCopyPaste,
-      cardLastFour: paymentMethod === "pix" ? null : cardLastFour ?? null,
-    });
   });
 
   app.get("/provider/verification", { preHandler: [app.authenticate] }, async (request, reply) => {

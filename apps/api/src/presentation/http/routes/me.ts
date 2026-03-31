@@ -6,7 +6,9 @@ import type { IUserRepository } from "../../../domain/ports/user-repository.js";
 import { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
 import { PostgresGeoService } from "../../../infrastructure/geo/postgres-geo-service.js";
 import { PostgresProfileRepository } from "../../../infrastructure/persistence/repository/postgres-profile-repository.js";
+import { PostgresProviderRepository } from "../../../infrastructure/persistence/repository/postgres-provider-repository.js";
 import { PostgresUserRepository } from "../../../infrastructure/persistence/repository/postgres-user-repository.js";
+import { formatDate } from "../../utils/format.js";
 import { destroyPublicIdIfAny } from "../utils/cloudinary-helpers.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
 import { getHttpStatusFromError, serializeUnknownError } from "../utils/serialize-error.js";
@@ -24,7 +26,7 @@ const phoneUpdate = z
   .refine((s) => {
     const d = s.replace(/\D/g, "");
     return d.length >= 10 && d.length <= 11;
-  }, { message: "Telefone inválido (use DDD + número)" });
+  }, { message: "Telefone invalido (use DDD + numero)" });
 
 const optionalPhotoUrl = z.preprocess(
   (v) => (v === "" || v === null ? undefined : v),
@@ -78,52 +80,96 @@ const updateProviderSchema = z.object({
   photoUrl: optionalPhotoUrl,
 });
 
+async function loadCurrentPlanSummary(
+  providers: PostgresProviderRepository,
+  userId: string,
+  role: string
+): Promise<
+  | {
+      id: string;
+      code: string;
+      name: string;
+      status: string;
+      expiresAt: string;
+      expiresAtLabel: string;
+    }
+  | null
+> {
+  if (role !== "provider") {
+    return null;
+  }
+
+  const currentAt = new Date().toISOString();
+  await providers.refreshExpiredPlanSubscriptions(userId, currentAt);
+
+  const currentPlan = await providers.findCurrentPlanSubscription(userId);
+  if (!currentPlan) {
+    return null;
+  }
+
+  const expiresAt = String(currentPlan.expires_at);
+  return {
+    id: String(currentPlan.plan_id),
+    code: String(currentPlan.plan_code),
+    name: String(currentPlan.plan_name),
+    status: String(currentPlan.status),
+    expiresAt,
+    expiresAtLabel: formatDate(expiresAt),
+  };
+}
+
+async function mapMePayload(providers: PostgresProviderRepository, user: Record<string, unknown>) {
+  const currentPlan = await loadCurrentPlanSummary(providers, String(user.id), String(user.role));
+
+  return sanitizeUser({
+    id: String(user.id),
+    role: String(user.role),
+    name: String(user.name),
+    email: String(user.email),
+    phone: String(user.phone),
+    address: user.address != null ? String(user.address) : null,
+    cpf: user.cpf != null ? String(user.cpf) : null,
+    radiusKm: user.radius_km != null ? Number(user.radius_km) : null,
+    services: (user.services as string[] | null) ?? null,
+    cep: user.cep != null ? String(user.cep) : null,
+    cepLat: user.cep_lat != null ? Number(user.cep_lat) : null,
+    cepLng: user.cep_lng != null ? Number(user.cep_lng) : null,
+    workCep: user.work_cep != null ? String(user.work_cep) : null,
+    workAddress: user.work_address != null ? String(user.work_address) : null,
+    workLat: user.work_lat != null ? Number(user.work_lat) : null,
+    workLng: user.work_lng != null ? Number(user.work_lng) : null,
+    photoUrl: user.photo_url != null ? String(user.photo_url) : null,
+    verificationStatus: user.verification_status ?? "unverified",
+    verificationDocumentUrl: user.verification_document_url ?? null,
+    verificationSelfieUrl: user.verification_selfie_url ?? null,
+    passwordHash: String(user.password_hash),
+    createdAt: String(user.created_at),
+    updatedAt: String(user.updated_at),
+    currentPlan,
+  });
+}
+
 export async function registerMeRoutes(
   app: FastifyInstance,
   profiles: PostgresProfileRepository = new PostgresProfileRepository(),
-  users: IUserRepository = new PostgresUserRepository()
+  users: IUserRepository = new PostgresUserRepository(),
+  providers: PostgresProviderRepository = new PostgresProviderRepository()
 ) {
   app.get("/me", { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = await profiles.findById(request.user.sub);
 
     if (!user) {
-      return reply.code(404).send({ message: "Usuário não encontrado" });
+      return reply.code(404).send({ message: "Usuario nao encontrado" });
     }
 
-    return reply.send(
-      sanitizeUser({
-        id: user.id,
-        role: user.role,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        address: user.address ?? null,
-        cpf: user.cpf ?? null,
-        radiusKm: user.radius_km ?? null,
-        services: user.services ?? null,
-        cep: user.cep ?? null,
-        cepLat: user.cep_lat ?? null,
-        cepLng: user.cep_lng ?? null,
-        workCep: user.work_cep ?? null,
-        workAddress: user.work_address ?? null,
-        workLat: user.work_lat ?? null,
-        workLng: user.work_lng ?? null,
-        photoUrl: user.photo_url ?? null,
-        verificationStatus: user.verification_status ?? "unverified",
-        verificationDocumentUrl: user.verification_document_url ?? null,
-        verificationSelfieUrl: user.verification_selfie_url ?? null,
-        passwordHash: user.password_hash,
-        createdAt: user.created_at,
-        updatedAt: user.updated_at,
-      })
-    );
+    return reply.send(await mapMePayload(providers, user));
   });
 
   app.patch("/me", { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = await profiles.findById(request.user.sub);
 
     if (!user) {
-      return reply.code(404).send({ message: "Usuário não encontrado" });
+      return reply.code(404).send({ message: "Usuario nao encontrado" });
     }
 
     const now = new Date().toISOString();
@@ -145,7 +191,7 @@ export async function registerMeRoutes(
       if (data.phone !== undefined) {
         const digits = normalizePhoneDigits(data.phone);
         if (await users.existsByPhoneDigits(digits, request.user.sub)) {
-          return reply.code(409).send({ message: "Telefone já cadastrado" });
+          return reply.code(409).send({ message: "Telefone ja cadastrado" });
         }
         updates.push(`phone = $${idx++}`);
         values.push(data.phone.trim());
@@ -157,7 +203,7 @@ export async function registerMeRoutes(
       if (data.cep !== undefined) {
         const cep = geo.normalizeCep(data.cep);
         if (cep.length !== 8) {
-          return reply.code(400).send({ message: "CEP inválido" });
+          return reply.code(400).send({ message: "CEP invalido" });
         }
         const prevCep = geo.normalizeCep(user.cep ?? "");
         const cepUnchanged = prevCep.length === 8 && cep === prevCep;
@@ -179,7 +225,7 @@ export async function registerMeRoutes(
           let coords = fullAddress.length > 5 ? await geo.getAddressCoords(fullAddress) : null;
           if (!coords) coords = await geo.getCepCoords(cep);
           if (!coords) {
-            return reply.code(400).send({ message: "Endereço ou CEP inválido" });
+            return reply.code(400).send({ message: "Endereco ou CEP invalido" });
           }
           updates.push(`cep = $${idx++}`);
           values.push(cep);
@@ -199,7 +245,7 @@ export async function registerMeRoutes(
       ) {
         const cepStored = geo.normalizeCep(user.cep ?? "");
         if (cepStored.length !== 8) {
-          return reply.code(400).send({ message: "Informe um CEP válido no perfil antes de alterar o endereço" });
+          return reply.code(400).send({ message: "Informe um CEP valido no perfil antes de alterar o endereco" });
         }
         const line = data.address !== undefined ? data.address : user.address;
         const parts = [
@@ -216,7 +262,7 @@ export async function registerMeRoutes(
     } else {
       const parsed = updateProviderSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.code(400).send({ message: "Dados inválidos", issues: parsed.error.flatten() });
+        return reply.code(400).send({ message: "Dados invalidos", issues: parsed.error.flatten() });
       }
       const data = parsed.data;
 
@@ -227,7 +273,7 @@ export async function registerMeRoutes(
       if (data.phone !== undefined) {
         const digits = normalizePhoneDigits(data.phone);
         if (await users.existsByPhoneDigits(digits, request.user.sub)) {
-          return reply.code(409).send({ message: "Telefone já cadastrado" });
+          return reply.code(409).send({ message: "Telefone ja cadastrado" });
         }
         updates.push(`phone = $${idx++}`);
         values.push(data.phone.trim());
@@ -248,12 +294,12 @@ export async function registerMeRoutes(
         ].filter(Boolean);
         const workAddressFull = workParts.join(", ");
         if (workCep.length !== 8) {
-          return reply.code(400).send({ message: "CEP do local de trabalho inválido" });
+          return reply.code(400).send({ message: "CEP do local de trabalho invalido" });
         }
         let coords = workAddressFull.length > 5 ? await geo.getAddressCoords(workAddressFull) : null;
         if (!coords) coords = await geo.getCepCoords(workCep);
         if (!coords) {
-          return reply.code(400).send({ message: "Endereço ou CEP do local de trabalho inválido" });
+          return reply.code(400).send({ message: "Endereco ou CEP do local de trabalho invalido" });
         }
         updates.push(`work_cep = $${idx++}`);
         values.push(workCep);
@@ -276,42 +322,16 @@ export async function registerMeRoutes(
     await profiles.updateById(request.user.sub, updates, values);
     const fresh = await profiles.findById(request.user.sub);
     if (!fresh) {
-      return reply.code(404).send({ message: "Usuário não encontrado" });
+      return reply.code(404).send({ message: "Usuario nao encontrado" });
     }
 
-    return reply.send(
-      sanitizeUser({
-        id: fresh.id,
-        role: fresh.role,
-        name: fresh.name,
-        email: fresh.email,
-        phone: fresh.phone,
-        address: fresh.address ?? null,
-        cpf: fresh.cpf ?? null,
-        radiusKm: fresh.radius_km ?? null,
-        services: fresh.services ?? null,
-        cep: fresh.cep ?? null,
-        cepLat: fresh.cep_lat ?? null,
-        cepLng: fresh.cep_lng ?? null,
-        workCep: fresh.work_cep ?? null,
-        workAddress: fresh.work_address ?? null,
-        workLat: fresh.work_lat ?? null,
-        workLng: fresh.work_lng ?? null,
-        photoUrl: fresh.photo_url ?? null,
-        verificationStatus: fresh.verification_status ?? "unverified",
-        verificationDocumentUrl: fresh.verification_document_url ?? null,
-        verificationSelfieUrl: fresh.verification_selfie_url ?? null,
-        passwordHash: fresh.password_hash,
-        createdAt: fresh.created_at,
-        updatedAt: fresh.updated_at,
-      })
-    );
+    return reply.send(await mapMePayload(providers, fresh));
   });
 
   app.post("/me/photo", { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = await profiles.findById(request.user.sub);
     if (!user) {
-      return reply.code(404).send({ message: "Usuário não encontrado" });
+      return reply.code(404).send({ message: "Usuario nao encontrado" });
     }
 
     const file = await request.file();
@@ -324,14 +344,14 @@ export async function registerMeRoutes(
       buffer = await file.toBuffer();
     } catch (e) {
       const code = getHttpStatusFromError(e) ?? 413;
-      return reply.code(code).send({ message: "Imagem muito grande ou inválida." });
+      return reply.code(code).send({ message: "Imagem muito grande ou invalida." });
     }
 
     try {
       assertProviderImageMime(file.mimetype);
       assertProviderImageSize(buffer.length);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Imagem inválida";
+      const msg = e instanceof Error ? e.message : "Imagem invalida";
       return reply.code(400).send({ message: msg });
     }
 
@@ -339,7 +359,7 @@ export async function registerMeRoutes(
     try {
       cloudinary = new CloudinaryService();
     } catch {
-      return reply.code(500).send({ message: "Serviço de imagens não configurado." });
+      return reply.code(500).send({ message: "Servico de imagens nao configurado." });
     }
 
     await destroyPublicIdIfAny(cloudinary, user.photo_storage_key ?? null);
@@ -368,49 +388,23 @@ export async function registerMeRoutes(
 
     const fresh = await profiles.findById(request.user.sub);
     if (!fresh) {
-      return reply.code(404).send({ message: "Usuário não encontrado" });
+      return reply.code(404).send({ message: "Usuario nao encontrado" });
     }
 
-    return reply.send(
-      sanitizeUser({
-        id: fresh.id,
-        role: fresh.role,
-        name: fresh.name,
-        email: fresh.email,
-        phone: fresh.phone,
-        address: fresh.address ?? null,
-        cpf: fresh.cpf ?? null,
-        radiusKm: fresh.radius_km ?? null,
-        services: fresh.services ?? null,
-        cep: fresh.cep ?? null,
-        cepLat: fresh.cep_lat ?? null,
-        cepLng: fresh.cep_lng ?? null,
-        workCep: fresh.work_cep ?? null,
-        workAddress: fresh.work_address ?? null,
-        workLat: fresh.work_lat ?? null,
-        workLng: fresh.work_lng ?? null,
-        photoUrl: fresh.photo_url ?? null,
-        verificationStatus: fresh.verification_status ?? "unverified",
-        verificationDocumentUrl: fresh.verification_document_url ?? null,
-        verificationSelfieUrl: fresh.verification_selfie_url ?? null,
-        passwordHash: fresh.password_hash,
-        createdAt: fresh.created_at,
-        updatedAt: fresh.updated_at,
-      })
-    );
+    return reply.send(await mapMePayload(providers, fresh));
   });
 
   app.delete("/me/photo", { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = await profiles.findById(request.user.sub);
     if (!user) {
-      return reply.code(404).send({ message: "Usuário não encontrado" });
+      return reply.code(404).send({ message: "Usuario nao encontrado" });
     }
 
     try {
       const cloudinary = new CloudinaryService();
       await destroyPublicIdIfAny(cloudinary, user.photo_storage_key ?? null);
     } catch {
-      // sem credenciais Cloudinary: limpa só a BD
+      // sem credenciais Cloudinary: limpa so a BD
     }
 
     const now = new Date().toISOString();
@@ -422,35 +416,9 @@ export async function registerMeRoutes(
 
     const fresh = await profiles.findById(request.user.sub);
     if (!fresh) {
-      return reply.code(404).send({ message: "Usuário não encontrado" });
+      return reply.code(404).send({ message: "Usuario nao encontrado" });
     }
 
-    return reply.send(
-      sanitizeUser({
-        id: fresh.id,
-        role: fresh.role,
-        name: fresh.name,
-        email: fresh.email,
-        phone: fresh.phone,
-        address: fresh.address ?? null,
-        cpf: fresh.cpf ?? null,
-        radiusKm: fresh.radius_km ?? null,
-        services: fresh.services ?? null,
-        cep: fresh.cep ?? null,
-        cepLat: fresh.cep_lat ?? null,
-        cepLng: fresh.cep_lng ?? null,
-        workCep: fresh.work_cep ?? null,
-        workAddress: fresh.work_address ?? null,
-        workLat: fresh.work_lat ?? null,
-        workLng: fresh.work_lng ?? null,
-        photoUrl: fresh.photo_url ?? null,
-        verificationStatus: fresh.verification_status ?? "unverified",
-        verificationDocumentUrl: fresh.verification_document_url ?? null,
-        verificationSelfieUrl: fresh.verification_selfie_url ?? null,
-        passwordHash: fresh.password_hash,
-        createdAt: fresh.created_at,
-        updatedAt: fresh.updated_at,
-      })
-    );
+    return reply.send(await mapMePayload(providers, fresh));
   });
 }

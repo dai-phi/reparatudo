@@ -1,6 +1,14 @@
-import type { Pool } from "pg";
+import { randomUUID } from "node:crypto";
+import type { Pool, PoolClient } from "pg";
 import { pool as defaultPool } from "../pool.js";
 import { StatusEnum } from "../../../domain/value-objects/status-enum.js";
+import type { ProviderPlanId, ProviderPlanPaymentMethod } from "../../../domain/value-objects/provider-plan.js";
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
 
 export class PostgresProviderRepository {
   constructor(private readonly db: Pool = defaultPool) {}
@@ -56,65 +64,327 @@ export class PostgresProviderRepository {
     return result.rows;
   }
 
-  async findProviderCreatedAt(providerId: string) {
-    const result = await this.db.query(`SELECT created_at FROM users WHERE id = $1 AND role = 'provider'`, [providerId]);
+  async refreshExpiredPlanSubscriptions(providerId: string, currentAt: string) {
+    await this.db.query(
+      `UPDATE provider_plan_subscriptions
+       SET status = 'expired', updated_at = $2
+       WHERE provider_id = $1
+         AND status = 'active'
+         AND expires_at <= $2`,
+      [providerId, currentAt]
+    );
+  }
+
+  async listPlans() {
+    const result = await this.db.query(
+      `SELECT id, code, name, description, price, billing_cycle_days, features, sort_order
+       FROM provider_subscription_plans
+       WHERE is_active = true
+       ORDER BY sort_order ASC, price ASC`
+    );
+    return result.rows;
+  }
+
+  async findPlanById(planId: ProviderPlanId) {
+    const result = await this.db.query(
+      `SELECT id, code, name, description, price, billing_cycle_days, features, sort_order
+       FROM provider_subscription_plans
+       WHERE id = $1
+         AND is_active = true`,
+      [planId]
+    );
     return result.rows[0] ?? null;
   }
 
-  async listPaidReferenceMonths(providerId: string) {
+  async findCurrentPlanSubscription(providerId: string) {
     const result = await this.db.query(
-      `SELECT reference_month::text as k FROM provider_payments
-       WHERE provider_id = $1 AND status = 'paid'`,
+      `SELECT
+          s.id,
+          s.provider_id,
+          s.plan_id,
+          s.status,
+          s.starts_at,
+          s.expires_at,
+          s.cancelled_at,
+          s.created_at,
+          s.updated_at,
+          p.code AS plan_code,
+          p.name AS plan_name,
+          p.description AS plan_description,
+          p.price,
+          p.billing_cycle_days,
+          p.features
+       FROM provider_plan_subscriptions s
+       INNER JOIN provider_subscription_plans p ON p.id = s.plan_id
+       WHERE s.provider_id = $1
+         AND s.status = 'active'
+       ORDER BY s.expires_at DESC, s.updated_at DESC
+       LIMIT 1`,
+      [providerId]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async listPlanPayments(providerId: string) {
+    const result = await this.db.query(
+      `SELECT
+          pay.id,
+          pay.provider_id,
+          pay.plan_id,
+          pay.subscription_id,
+          pay.amount,
+          pay.currency,
+          pay.payment_method,
+          pay.status,
+          pay.coverage_starts_at,
+          pay.coverage_ends_at,
+          pay.paid_at,
+          pay.mock_transaction_id,
+          pay.pix_copy_paste,
+          pay.card_last_four,
+          pay.created_at,
+          p.code AS plan_code,
+          p.name AS plan_name
+       FROM provider_plan_payments pay
+       INNER JOIN provider_subscription_plans p ON p.id = pay.plan_id
+       WHERE pay.provider_id = $1
+       ORDER BY COALESCE(pay.paid_at, pay.created_at) DESC, pay.created_at DESC`,
       [providerId]
     );
     return result.rows;
   }
 
-  async listPayments(providerId: string) {
-    const result = await this.db.query(
-      `SELECT id, amount, payment_method, status, reference_month, paid_at, pix_copy_paste, card_last_four, created_at
-       FROM provider_payments WHERE provider_id = $1 ORDER BY paid_at DESC, created_at DESC`,
-      [providerId]
-    );
-    return result.rows;
-  }
-
-  async listPaidReferenceMonthsRaw(providerId: string) {
-    const result = await this.db.query(
-      `SELECT reference_month FROM provider_payments WHERE provider_id = $1 AND status = 'paid'`,
-      [providerId]
-    );
-    return result.rows;
-  }
-
-  async insertPayment(params: {
-    id: string;
+  async purchasePlan(input: {
     providerId: string;
-    amount: number;
-    paymentMethod: "pix" | "cartao_credito" | "cartao_debito";
-    referenceMonth: string;
-    paidAt: string;
-    pixCopyPaste: string | null;
+    planId: ProviderPlanId;
+    paymentMethod: ProviderPlanPaymentMethod;
     cardLastFour: string | null;
-    createdAt: string;
-    updatedAt: string;
+    pixCopyPaste: string | null;
+    mockTransactionId: string;
+    currentAt: string;
   }) {
-    await this.db.query(
-      `INSERT INTO provider_payments (id, provider_id, amount, payment_method, status, reference_month, paid_at, pix_copy_paste, card_last_four, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'paid', $5, $6, $7, $8, $9, $10)`,
-      [
-        params.id,
-        params.providerId,
-        params.amount,
-        params.paymentMethod,
-        params.referenceMonth,
-        params.paidAt,
-        params.pixCopyPaste,
-        params.cardLastFour,
-        params.createdAt,
-        params.updatedAt,
-      ]
+    const client = await this.db.connect();
+
+    try {
+      await client.query("BEGIN");
+      await this.refreshExpiredPlanSubscriptionsWithClient(client, input.providerId, input.currentAt);
+
+      const plan = await this.findPlanByIdWithClient(client, input.planId);
+      if (!plan) {
+        throw new Error("PROVIDER_PLAN_NOT_FOUND");
+      }
+
+      const currentSubscription = await this.findCurrentPlanSubscriptionWithClient(client, input.providerId);
+      const now = new Date(input.currentAt);
+      const billingCycleDays = Number(plan.billing_cycle_days);
+
+      let subscriptionId: string;
+      let coverageStartAt: string;
+      let coverageEndAt: string;
+
+      if (currentSubscription && String(currentSubscription.plan_id) === input.planId) {
+        const currentExpiration = new Date(String(currentSubscription.expires_at));
+        const baseStart = currentExpiration > now ? currentExpiration : now;
+        coverageStartAt = baseStart.toISOString();
+        coverageEndAt = addDays(baseStart, billingCycleDays).toISOString();
+
+        subscriptionId = String(currentSubscription.id);
+        await client.query(
+          `UPDATE provider_plan_subscriptions
+           SET expires_at = $1, updated_at = $2
+           WHERE id = $3`,
+          [coverageEndAt, input.currentAt, subscriptionId]
+        );
+      } else {
+        if (currentSubscription) {
+          await client.query(
+            `UPDATE provider_plan_subscriptions
+             SET status = 'cancelled', cancelled_at = $1, updated_at = $1
+             WHERE id = $2`,
+            [input.currentAt, currentSubscription.id]
+          );
+        }
+
+        subscriptionId = randomUUID();
+        coverageStartAt = input.currentAt;
+        coverageEndAt = addDays(now, billingCycleDays).toISOString();
+
+        await client.query(
+          `INSERT INTO provider_plan_subscriptions (
+             id,
+             provider_id,
+             plan_id,
+             status,
+             starts_at,
+             expires_at,
+             cancelled_at,
+             created_at,
+             updated_at
+           )
+           VALUES ($1, $2, $3, 'active', $4, $5, NULL, $6, $7)`,
+          [subscriptionId, input.providerId, input.planId, input.currentAt, coverageEndAt, input.currentAt, input.currentAt]
+        );
+      }
+
+      const paymentId = randomUUID();
+      await client.query(
+        `INSERT INTO provider_plan_payments (
+           id,
+           provider_id,
+           plan_id,
+           subscription_id,
+           amount,
+           currency,
+           payment_method,
+           status,
+           coverage_starts_at,
+           coverage_ends_at,
+           paid_at,
+           mock_transaction_id,
+           pix_copy_paste,
+           card_last_four,
+           created_at,
+           updated_at
+         )
+         VALUES ($1, $2, $3, $4, $5, 'BRL', $6, 'paid', $7, $8, $9, $10, $11, $12, $13, $14)`,
+        [
+          paymentId,
+          input.providerId,
+          input.planId,
+          subscriptionId,
+          Number(plan.price),
+          input.paymentMethod,
+          coverageStartAt,
+          coverageEndAt,
+          input.currentAt,
+          input.mockTransactionId,
+          input.pixCopyPaste,
+          input.cardLastFour,
+          input.currentAt,
+          input.currentAt,
+        ]
+      );
+
+      const freshSubscription = await this.findSubscriptionByIdWithClient(client, subscriptionId);
+      const freshPayment = await this.findPlanPaymentByIdWithClient(client, paymentId);
+
+      await client.query("COMMIT");
+
+      return {
+        subscription: freshSubscription,
+        payment: freshPayment,
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async refreshExpiredPlanSubscriptionsWithClient(client: PoolClient, providerId: string, currentAt: string) {
+    await client.query(
+      `UPDATE provider_plan_subscriptions
+       SET status = 'expired', updated_at = $2
+       WHERE provider_id = $1
+         AND status = 'active'
+         AND expires_at <= $2`,
+      [providerId, currentAt]
     );
+  }
+
+  private async findPlanByIdWithClient(client: PoolClient, planId: ProviderPlanId) {
+    const result = await client.query(
+      `SELECT id, code, name, description, price, billing_cycle_days, features, sort_order
+       FROM provider_subscription_plans
+       WHERE id = $1
+         AND is_active = true`,
+      [planId]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  private async findCurrentPlanSubscriptionWithClient(client: PoolClient, providerId: string) {
+    const result = await client.query(
+      `SELECT
+          s.id,
+          s.provider_id,
+          s.plan_id,
+          s.status,
+          s.starts_at,
+          s.expires_at,
+          s.cancelled_at,
+          s.created_at,
+          s.updated_at,
+          p.code AS plan_code,
+          p.name AS plan_name,
+          p.description AS plan_description,
+          p.price,
+          p.billing_cycle_days,
+          p.features
+       FROM provider_plan_subscriptions s
+       INNER JOIN provider_subscription_plans p ON p.id = s.plan_id
+       WHERE s.provider_id = $1
+         AND s.status = 'active'
+       ORDER BY s.expires_at DESC, s.updated_at DESC
+       LIMIT 1`,
+      [providerId]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  private async findSubscriptionByIdWithClient(client: PoolClient, subscriptionId: string) {
+    const result = await client.query(
+      `SELECT
+          s.id,
+          s.provider_id,
+          s.plan_id,
+          s.status,
+          s.starts_at,
+          s.expires_at,
+          s.cancelled_at,
+          s.created_at,
+          s.updated_at,
+          p.code AS plan_code,
+          p.name AS plan_name,
+          p.description AS plan_description,
+          p.price,
+          p.billing_cycle_days,
+          p.features
+       FROM provider_plan_subscriptions s
+       INNER JOIN provider_subscription_plans p ON p.id = s.plan_id
+       WHERE s.id = $1`,
+      [subscriptionId]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  private async findPlanPaymentByIdWithClient(client: PoolClient, paymentId: string) {
+    const result = await client.query(
+      `SELECT
+          pay.id,
+          pay.provider_id,
+          pay.plan_id,
+          pay.subscription_id,
+          pay.amount,
+          pay.currency,
+          pay.payment_method,
+          pay.status,
+          pay.coverage_starts_at,
+          pay.coverage_ends_at,
+          pay.paid_at,
+          pay.mock_transaction_id,
+          pay.pix_copy_paste,
+          pay.card_last_four,
+          pay.created_at,
+          p.code AS plan_code,
+          p.name AS plan_name
+       FROM provider_plan_payments pay
+       INNER JOIN provider_subscription_plans p ON p.id = pay.plan_id
+       WHERE pay.id = $1`,
+      [paymentId]
+    );
+    return result.rows[0] ?? null;
   }
 
   async findVerificationByProviderId(providerId: string) {
