@@ -62,5 +62,8 @@ export interface RatingRecord {
   providerId: string;
   rating: number;
   review: string | null;
+  tags: string[];
+  providerResponse: string | null;
+  providerResponseAt: string | null;
   createdAt: string;
 }

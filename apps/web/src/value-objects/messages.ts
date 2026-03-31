@@ -32,6 +32,10 @@ export const UI_MESSAGES = {
   },
   rating: {
     submitted: "Avaliação enviada! Obrigado.",
+    providerResponseSubmitted: "Resposta enviada para a avaliação.",
+  },
+  incident: {
+    submitted: "Problema reportado com sucesso. Nossa equipe vai analisar.",
   },
   billing: {
     paymentRegistered: "Pagamento registrado com sucesso!",
@@ -67,6 +71,10 @@ export const UI_ERRORS = {
   },
   rating: {
     submit: "Não foi possível enviar a avaliação",
+    providerResponse: "Não foi possível enviar a resposta",
+  },
+  incident: {
+    submit: "Não foi possível reportar o problema",
   },
   billing: {
     pay: "Não foi possível concluir o pagamento",

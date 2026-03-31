@@ -244,4 +244,37 @@ export class PostgresRequestRepository implements IRequestRepository {
       [params.lat, params.lng, params.now, params.providerId]
     );
   }
+
+  async insertIncident(params: {
+    id: string;
+    requestId: string;
+    reporterId: string;
+    reporterRole: "client" | "provider";
+    targetUserId: string | null;
+    type: string;
+    description: string;
+    attachments: string[];
+    status: "open" | "in_review" | "resolved" | "rejected";
+    createdAt: string;
+    updatedAt: string;
+  }): Promise<void> {
+    await this.db.query(
+      `INSERT INTO incidents (
+        id, request_id, reporter_id, reporter_role, target_user_id, type, description, attachments, status, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text[], $9, $10, $11)`,
+      [
+        params.id,
+        params.requestId,
+        params.reporterId,
+        params.reporterRole,
+        params.targetUserId,
+        params.type,
+        params.description,
+        params.attachments,
+        params.status,
+        params.createdAt,
+        params.updatedAt,
+      ]
+    );
+  }
 }

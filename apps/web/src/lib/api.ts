@@ -59,6 +59,11 @@ export interface ProviderHistoryItem {
   desc: string;
   date: string;
   value: string;
+  ratingId?: string | null;
+  rating?: number;
+  review?: string;
+  tags?: string[];
+  providerResponse?: string;
 }
 
 export type ProviderPaymentMethod = "pix" | "cartao_credito" | "cartao_debito";
@@ -115,6 +120,8 @@ export interface ClientHistoryItem {
   rated: boolean;
   rating: number;
   review: string;
+  tags?: string[];
+  providerResponse?: string;
 }
 
 export interface ClientRequestItem {
@@ -169,6 +176,18 @@ export interface ProviderVerification {
   selfieUrl: string | null;
   canSubmit: boolean;
   isVerified: boolean;
+}
+
+export interface AdminProviderVerificationRow {
+  providerId: string;
+  name: string;
+  email: string;
+  phone: string;
+  cpf: string | null;
+  status: VerificationStatus;
+  documentUrl: string | null;
+  selfieUrl: string | null;
+  updatedAt: string;
 }
 
 export class ApiError extends Error {
@@ -455,7 +474,7 @@ export function getClientRequests() {
   return apiFetch<ClientRequestItem[]>("/client/requests", { auth: true });
 }
 
-export function createRating(payload: { requestId: string; rating: number; review?: string }) {
+export function createRating(payload: { requestId: string; rating: number; review?: string; tags?: string[] }) {
   return apiFetch<{ ok: true }>("/client/ratings", { method: "POST", auth: true, body: payload });
 }
 
@@ -560,6 +579,55 @@ export function submitProviderVerification() {
   return apiFetch<{ status: "pending"; message: string }>("/provider/verification/submit", { method: "POST", auth: true });
 }
 
+async function adminKycFetch<T>(path: string, adminKey: string, options?: { method?: string; body?: unknown }) {
+  const response = await fetch(`${API_URL}${path}`, {
+    method: options?.method ?? "GET",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "x-admin-key": adminKey,
+    },
+    credentials: "include",
+    body: options?.body !== undefined ? JSON.stringify(options.body) : undefined,
+  });
+
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+    const message =
+      typeof payload === "object" && payload !== null && "message" in payload
+        ? String((payload as { message: unknown }).message)
+        : response.statusText || "Erro inesperado";
+    throw new ApiError(message, response.status, payload);
+  }
+
+  return (await response.json()) as T;
+}
+
+export function getAdminProviderVerifications(
+  adminKey: string,
+  status: VerificationStatus = "pending"
+) {
+  const q = encodeURIComponent(status);
+  return adminKycFetch<AdminProviderVerificationRow[]>(`/admin/provider-verifications?status=${q}`, adminKey);
+}
+
+export function decideAdminProviderVerification(
+  adminKey: string,
+  providerId: string,
+  status: "verified" | "rejected"
+) {
+  return adminKycFetch<{ providerId: string; status: "verified" | "rejected"; message: string }>(
+    `/admin/provider-verifications/${providerId}/decision`,
+    adminKey,
+    { method: "POST", body: { status } }
+  );
+}
+
 export function createServiceRequest(payload: { serviceId: string; description?: string; providerId: string }) {
   return apiFetch<{ requestId: string }>("/requests", { method: "POST", auth: true, body: payload });
 }
@@ -612,5 +680,24 @@ export function completeRequest(id: string) {
   return apiFetch<{ request: RequestDetails; message: ChatMessage }>(`/requests/${id}/complete`, {
     method: "POST",
     auth: true,
+  });
+}
+
+export function reportIncident(
+  id: string,
+  payload: { type: "fraude" | "conduta" | "cobranca" | "seguranca" | "outro"; description: string; attachments?: string[] }
+) {
+  return apiFetch<{ ok: true; message: string }>(`/requests/${id}/incidents`, {
+    method: "POST",
+    auth: true,
+    body: payload,
+  });
+}
+
+export function respondToRating(ratingId: string, response: string) {
+  return apiFetch<{ ok: true }>(`/provider/ratings/${ratingId}/response`, {
+    method: "POST",
+    auth: true,
+    body: { response },
   });
 }

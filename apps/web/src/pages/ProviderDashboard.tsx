@@ -20,7 +20,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ApiError, RequestSummary, acceptRequest, cancelRequest, completeRequest, confirmRequest, getProviderHistory, getProviderRequests, getProviderStats, logout, rejectRequest } from "@/lib/api";
+import { ApiError, RequestSummary, acceptRequest, cancelRequest, completeRequest, confirmRequest, getProviderHistory, getProviderRequests, getProviderStats, logout, rejectRequest, respondToRating } from "@/lib/api";
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
@@ -48,6 +48,7 @@ const ProviderDashboard = () => {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [ratingResponseDrafts, setRatingResponseDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (me && me.role !== "provider") {
@@ -153,6 +154,18 @@ const ProviderDashboard = () => {
     },
     onError: (error: unknown) => {
       const message = error instanceof ApiError ? error.message : UI_ERRORS.request.confirm;
+      toast.error(message);
+    },
+  });
+
+  const respondRatingMutation = useMutation({
+    mutationFn: ({ ratingId, response }: { ratingId: string; response: string }) => respondToRating(ratingId, response),
+    onSuccess: () => {
+      toast.success(UI_MESSAGES.rating.providerResponseSubmitted);
+      queryClient.invalidateQueries({ queryKey: ["providerHistory"] });
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.rating.providerResponse;
       toast.error(message);
     },
   });
@@ -322,6 +335,50 @@ const ProviderDashboard = () => {
                       </div>
                     </div>
                     <p className="text-sm text-muted-foreground">{item.desc}</p>
+                    {(item.rating ?? 0) > 0 && (
+                      <div className="mt-3 space-y-2 border-t border-border pt-3">
+                        <div className="flex items-center gap-2">
+                          <Star className="w-4 h-4 text-warning fill-warning" />
+                          <span className="text-sm font-medium text-card-foreground">{(item.rating ?? 0).toFixed(1)}</span>
+                          {item.tags?.map((tag) => (
+                            <Badge key={tag} variant="secondary" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                        {item.review && <p className="text-sm text-muted-foreground italic">"{item.review}"</p>}
+                        {item.providerResponse ? (
+                          <p className="text-sm text-muted-foreground">Sua resposta: "{item.providerResponse}"</p>
+                        ) : item.ratingId ? (
+                          <div className="space-y-2">
+                            <Textarea
+                              value={ratingResponseDrafts[item.ratingId] ?? ""}
+                              onChange={(e) =>
+                                setRatingResponseDrafts((prev) => ({ ...prev, [item.ratingId!]: e.target.value }))
+                              }
+                              placeholder="Responder avaliação (opcional)"
+                              rows={2}
+                              maxLength={800}
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                respondRatingMutation.mutate({
+                                  ratingId: item.ratingId!,
+                                  response: (ratingResponseDrafts[item.ratingId!] ?? "").trim(),
+                                })
+                              }
+                              disabled={
+                                respondRatingMutation.isPending || !(ratingResponseDrafts[item.ratingId] ?? "").trim()
+                              }
+                            >
+                              Responder avaliação
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
                   </motion.div>
                 )) : (
                   <div className="text-center py-16 text-muted-foreground">

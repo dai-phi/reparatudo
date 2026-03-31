@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { SERVICE_IDS } from "../../../domain/value-objects/service-id.js";
 import type { IUserRepository } from "../../../domain/ports/user-repository.js";
@@ -43,6 +44,12 @@ const statusValueSchema = z.object({
 
 const cancelSchema = z.object({
   reason: z.string().trim().max(280).optional().nullable(),
+});
+
+const reportIncidentSchema = z.object({
+  type: z.enum(["fraude", "conduta", "cobranca", "seguranca", "outro"]),
+  description: z.string().trim().min(10).max(2000),
+  attachments: z.array(z.string().url()).max(5).optional(),
 });
 
 export type RequestRouteDeps = {
@@ -246,5 +253,40 @@ export async function registerRequestRoutes(app: FastifyInstance, deps: RequestR
       return reply.code(result.status).send({ message: result.message });
     }
     return reply.send(result);
+  });
+
+  app.post("/requests/:id/incidents", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "client" && request.user.role !== "provider") {
+      return reply.code(403).send({ message: "Acesso negado" });
+    }
+
+    const parsed = reportIncidentSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Dados invalidos", issues: parsed.error.flatten() });
+    }
+
+    const target = await deps.requests.ensureParticipant((request.params as RequestParams).id, request.user.sub, request.user.role);
+    if (!target) {
+      return reply.code(404).send({ message: "Pedido nao encontrado" });
+    }
+
+    const targetUserId = request.user.role === "client" ? target.providerId : target.clientId;
+    const now = new Date().toISOString();
+
+    await deps.requests.insertIncident({
+      id: randomUUID(),
+      requestId: target.id,
+      reporterId: request.user.sub,
+      reporterRole: request.user.role,
+      targetUserId,
+      type: parsed.data.type,
+      description: parsed.data.description,
+      attachments: parsed.data.attachments ?? [],
+      status: "open",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return reply.code(201).send({ ok: true, message: "Incidente reportado com sucesso." });
   });
 }

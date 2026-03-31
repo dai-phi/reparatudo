@@ -11,6 +11,7 @@ const ratingSchema = z.object({
   requestId: z.string().min(1),
   rating: z.number().min(1).max(5),
   review: z.string().optional().nullable(),
+  tags: z.array(z.enum(["pontual", "limpo", "educado", "comunicativo", "resolutivo"])).max(5).optional(),
 });
 
 function statusMeta(status: string): { label: string; chatOpen: boolean } {
@@ -77,6 +78,8 @@ export async function registerClientRoutes(
       rated: Boolean(row.rating),
       rating: row.rating ? Number(row.rating) : 0,
       review: row.review || "",
+      tags: Array.isArray(row.tags) ? row.tags : [],
+      providerResponse: row.provider_response || "",
     }));
 
     return reply.send(items);
@@ -118,6 +121,7 @@ export async function registerClientRoutes(
       providerId: target.provider_id,
       rating: parsed.data.rating,
       review: parsed.data.review?.trim() || null,
+      tags: parsed.data.tags ?? [],
       createdAt: new Date().toISOString(),
     });
 

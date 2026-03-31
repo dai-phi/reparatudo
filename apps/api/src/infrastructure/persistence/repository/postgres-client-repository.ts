@@ -19,7 +19,7 @@ export class PostgresClientRepository {
   async listHistory(clientId: string) {
     const result = await this.db.query(
       `SELECT r.id, r.service_id, r.description, r.completed_at, r.updated_at, r.agreed_value,
-              u.name as provider_name, ra.rating, ra.review
+              u.name as provider_name, ra.rating, ra.review, ra.tags, ra.provider_response
        FROM requests r
        LEFT JOIN users u ON u.id = r.provider_id
        LEFT JOIN ratings ra ON ra.request_id = r.id
@@ -47,12 +47,13 @@ export class PostgresClientRepository {
     providerId: string;
     rating: number;
     review: string | null;
+    tags: string[];
     createdAt: string;
   }) {
     await this.db.query(
-      `INSERT INTO ratings (id, request_id, client_id, provider_id, rating, review, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [params.id, params.requestId, params.clientId, params.providerId, params.rating, params.review, params.createdAt]
+      `INSERT INTO ratings (id, request_id, client_id, provider_id, rating, review, tags, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::text[], $8)`,
+      [params.id, params.requestId, params.clientId, params.providerId, params.rating, params.review, params.tags, params.createdAt]
     );
   }
 }

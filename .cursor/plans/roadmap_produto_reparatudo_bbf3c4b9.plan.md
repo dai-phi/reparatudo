@@ -10,7 +10,7 @@ todos:
     status: completed
   - id: trust-ratings-tags-incidents
     content: Evoluir avaliações (tags + resposta do prestador) e criar fluxo de incidentes/report com armazenamento e UI.
-    status: pending
+    status: completed
   - id: core-dual-request-mode
     content: "Evoluir o core para suportar 2 modos: pedido direcionado (existente) e pedido aberto com propostas (novas entidades e telas)."
     status: pending

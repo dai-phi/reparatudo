@@ -79,4 +79,17 @@ export interface IRequestRepository {
     lng: number;
     now: string;
   }): Promise<void>;
+  insertIncident(params: {
+    id: string;
+    requestId: string;
+    reporterId: string;
+    reporterRole: "client" | "provider";
+    targetUserId: string | null;
+    type: string;
+    description: string;
+    attachments: string[];
+    status: "open" | "in_review" | "resolved" | "rejected";
+    createdAt: string;
+    updatedAt: string;
+  }): Promise<void>;
 }

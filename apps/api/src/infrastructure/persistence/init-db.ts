@@ -100,8 +100,25 @@ export async function initDb() {
       provider_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       rating INTEGER NOT NULL,
       review TEXT,
+      tags TEXT[] NOT NULL DEFAULT '{}',
+      provider_response TEXT,
+      provider_response_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL,
       UNIQUE (request_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS incidents (
+      id TEXT PRIMARY KEY,
+      request_id TEXT NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
+      reporter_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reporter_role TEXT NOT NULL CHECK (reporter_role IN ('client', 'provider')),
+      target_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      type TEXT NOT NULL,
+      description TEXT NOT NULL,
+      attachments TEXT[] NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_review', 'resolved', 'rejected')),
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS cep_cache (
@@ -115,6 +132,8 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_requests_client ON requests(client_id);
     CREATE INDEX IF NOT EXISTS idx_messages_request ON messages(request_id);
     CREATE INDEX IF NOT EXISTS idx_ratings_provider ON ratings(provider_id);
+    CREATE INDEX IF NOT EXISTS idx_incidents_request ON incidents(request_id);
+    CREATE INDEX IF NOT EXISTS idx_incidents_reporter ON incidents(reporter_id);
     CREATE UNIQUE INDEX IF NOT EXISTS users_cpf_unique ON users (cpf) WHERE cpf IS NOT NULL;
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_provider_cpf_required;
     ALTER TABLE users ADD CONSTRAINT users_provider_cpf_required CHECK (role <> 'provider' OR (cpf IS NOT NULL AND cpf <> ''));
@@ -164,6 +183,9 @@ export async function initDb() {
     ALTER TABLE users
       ADD CONSTRAINT users_verification_status_check
       CHECK (verification_status IN ('unverified', 'pending', 'verified', 'rejected'));
+    ALTER TABLE ratings ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
+    ALTER TABLE ratings ADD COLUMN IF NOT EXISTS provider_response TEXT;
+    ALTER TABLE ratings ADD COLUMN IF NOT EXISTS provider_response_at TIMESTAMPTZ;
   `);
 
   await pool.query(`

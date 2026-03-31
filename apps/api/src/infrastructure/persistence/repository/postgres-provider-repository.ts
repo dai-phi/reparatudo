@@ -44,9 +44,11 @@ export class PostgresProviderRepository {
 
   async listHistory(providerId: string) {
     const result = await this.db.query(
-      `SELECT r.id, r.service_id, r.description, r.completed_at, r.updated_at, r.agreed_value, u.name as client_name
+      `SELECT r.id, r.service_id, r.description, r.completed_at, r.updated_at, r.agreed_value, u.name as client_name,
+              ra.id AS rating_id, ra.rating, ra.review, ra.tags, ra.provider_response
        FROM requests r
        LEFT JOIN users u ON u.id = r.client_id
+       LEFT JOIN ratings ra ON ra.request_id = r.id
        WHERE r.provider_id = $1 AND r.status = 'completed'
        ORDER BY r.completed_at DESC NULLS LAST, r.updated_at DESC`,
       [providerId]
@@ -162,5 +164,35 @@ export class PostgresProviderRepository {
     values.push(new Date().toISOString());
 
     await this.db.query(`UPDATE users SET ${sets.join(", ")} WHERE id = $${idx}`, [...values, providerId]);
+  }
+
+  async listVerificationQueue(status: "pending" | "unverified" | "verified" | "rejected" = "pending") {
+    const result = await this.db.query(
+      `SELECT id, name, email, phone, cpf, verification_status, verification_document_url, verification_selfie_url, updated_at
+       FROM users
+       WHERE role = 'provider' AND verification_status = $1
+       ORDER BY updated_at DESC`,
+      [status]
+    );
+    return result.rows;
+  }
+
+  async findRatingForProviderResponse(providerId: string, ratingId: string) {
+    const result = await this.db.query(
+      `SELECT id, provider_id, provider_response
+       FROM ratings
+       WHERE id = $1 AND provider_id = $2`,
+      [ratingId, providerId]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async updateRatingProviderResponse(params: { ratingId: string; response: string; now: string }) {
+    await this.db.query(
+      `UPDATE ratings
+       SET provider_response = $1, provider_response_at = $2
+       WHERE id = $3`,
+      [params.response, params.now, params.ratingId]
+    );
   }
 }

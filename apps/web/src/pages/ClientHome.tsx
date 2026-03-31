@@ -65,6 +65,14 @@ const services = [
   { id: "reparos", icon: Wrench, label: "Reparos Gerais", desc: "Diversos serviços", color: "from-emerald-400 to-green-500" },
 ];
 
+const RATING_TAGS = [
+  { id: "pontual", label: "Pontual" },
+  { id: "limpo", label: "Limpo" },
+  { id: "educado", label: "Educado" },
+  { id: "comunicativo", label: "Comunicativo" },
+  { id: "resolutivo", label: "Resolutivo" },
+] as const;
+
 const StarRating = ({ rating, onRate, interactive = true }: { rating: number; onRate?: (r: number) => void; interactive?: boolean }) => {
   const [hover, setHover] = useState(0);
   return (
@@ -108,6 +116,7 @@ const ClientHome = () => {
   const [ratingServiceId, setRatingServiceId] = useState<string | null>(null);
   const [tempRating, setTempRating] = useState(0);
   const [tempReview, setTempReview] = useState("");
+  const [tempTags, setTempTags] = useState<string[]>([]);
   const [cancelPendingOpen, setCancelPendingOpen] = useState(false);
 
   const selectedServiceMeta = services.find((service) => service.id === selectedService);
@@ -170,6 +179,7 @@ const ClientHome = () => {
       setRatingServiceId(null);
       setTempRating(0);
       setTempReview("");
+      setTempTags([]);
       queryClient.invalidateQueries({ queryKey: ["clientHistory"] });
     },
     onError: (error: unknown) => {
@@ -261,7 +271,7 @@ const ClientHome = () => {
       toast.error(UI_MESSAGES.validation.selectRating);
       return;
     }
-    ratingMutation.mutate({ requestId: id, rating: tempRating, review: tempReview.trim() || undefined });
+    ratingMutation.mutate({ requestId: id, rating: tempRating, review: tempReview.trim() || undefined, tags: tempTags });
   };
 
   return (
@@ -682,9 +692,23 @@ const ClientHome = () => {
                   <p className="text-sm text-muted-foreground mb-3">{svc.desc}</p>
 
                   {svc.rated ? (
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-col items-start gap-2">
+                      <div className="flex items-center gap-3">
                       <StarRating rating={svc.rating} interactive={false} />
                       {svc.review && <p className="text-sm text-muted-foreground italic">"{svc.review}"</p>}
+                      </div>
+                      {(svc.tags?.length ?? 0) > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {svc.tags?.map((tag) => (
+                            <Badge key={tag} variant="secondary" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      {svc.providerResponse && (
+                        <p className="text-sm text-muted-foreground">Resposta do prestador: "{svc.providerResponse}"</p>
+                      )}
                     </div>
                   ) : ratingServiceId === svc.id ? (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3 pt-2 border-t border-border">
@@ -696,9 +720,41 @@ const ClientHome = () => {
                         <Label className="mb-2 block text-sm">Comentario (opcional)</Label>
                         <Textarea placeholder="Como foi a experiencia?" value={tempReview} onChange={(e) => setTempReview(e.target.value)} rows={2} className="resize-none" />
                       </div>
+                      <div>
+                        <Label className="mb-2 block text-sm">Tags (opcional)</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {RATING_TAGS.map((tag) => {
+                            const selected = tempTags.includes(tag.id);
+                            return (
+                              <Button
+                                key={tag.id}
+                                type="button"
+                                variant={selected ? "hero" : "outline"}
+                                size="sm"
+                                onClick={() =>
+                                  setTempTags((prev) => (prev.includes(tag.id) ? prev.filter((t) => t !== tag.id) : [...prev, tag.id]))
+                                }
+                              >
+                                {tag.label}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
                       <div className="flex gap-2">
                         <Button variant="hero" size="sm" onClick={() => submitRating(svc.id)}>Enviar Avaliacao</Button>
-                        <Button variant="outline" size="sm" onClick={() => { setRatingServiceId(null); setTempRating(0); setTempReview(""); }}>Avaliar depois</Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setRatingServiceId(null);
+                            setTempRating(0);
+                            setTempReview("");
+                            setTempTags([]);
+                          }}
+                        >
+                          Avaliar depois
+                        </Button>
                       </div>
                     </motion.div>
                   ) : (

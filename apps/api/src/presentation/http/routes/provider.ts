@@ -68,6 +68,23 @@ const createPaymentSchema = z.object({
 });
 
 const verificationStatusSchema = z.enum(["unverified", "pending", "verified", "rejected"]);
+const ratingResponseSchema = z.object({
+  response: z.string().trim().min(5).max(800),
+});
+const adminDecisionSchema = z.object({
+  status: z.enum(["verified", "rejected"]),
+});
+const adminQueueQuerySchema = z.object({
+  status: verificationStatusSchema.optional().default("pending"),
+});
+
+function hasKycAdminAccess(headers: Record<string, unknown>): boolean {
+  const expected = process.env.ADMIN_KYC_KEY;
+  if (!expected || expected.trim() === "") return false;
+  const headerValue = headers["x-admin-key"];
+  if (typeof headerValue !== "string") return false;
+  return headerValue === expected;
+}
 
 function providerRequestStatusLabel(status: string): string {
   switch (status) {
@@ -167,10 +184,42 @@ export async function registerProviderRoutes(
         desc: row.description || NO_DESCRIPTION,
         date: formatDate(row.completed_at || row.updated_at),
         value: formatCurrency(agreedValue),
+        ratingId: row.rating_id ?? null,
+        rating: row.rating ? Number(row.rating) : 0,
+        review: row.review ?? "",
+        tags: Array.isArray(row.tags) ? row.tags : [],
+        providerResponse: row.provider_response ?? "",
       };
     });
 
     return reply.send(items);
+  });
+
+  app.post("/provider/ratings/:id/response", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "provider") {
+      return reply.code(403).send({ message: "Acesso negado" });
+    }
+
+    const parsed = ratingResponseSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Dados invalidos", issues: parsed.error.flatten() });
+    }
+
+    const target = await providers.findRatingForProviderResponse(request.user.sub, String((request.params as { id: string }).id));
+    if (!target) {
+      return reply.code(404).send({ message: "Avaliacao nao encontrada" });
+    }
+    if (target.provider_response) {
+      return reply.code(409).send({ message: "Resposta já registrada para esta avaliação" });
+    }
+
+    await providers.updateRatingProviderResponse({
+      ratingId: target.id,
+      response: parsed.data.response,
+      now: new Date().toISOString(),
+    });
+
+    return reply.send({ ok: true });
   });
 
   app.get("/provider/billing/summary", { preHandler: [app.authenticate] }, async (request, reply) => {
@@ -496,5 +545,64 @@ export async function registerProviderRoutes(
     }
     await providers.updateVerificationAssets(request.user.sub, { verificationStatus: "pending" });
     return reply.send({ status: "pending" as const, message: "Verificação enviada para análise." });
+  });
+
+  app.get("/admin/provider-verifications", async (request, reply) => {
+    if (!hasKycAdminAccess(request.headers as Record<string, unknown>)) {
+      return reply.code(401).send({ message: "Nao autorizado" });
+    }
+    const parsed = adminQueueQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Parametros invalidos", issues: parsed.error.flatten() });
+    }
+    const rows = await providers.listVerificationQueue(parsed.data.status);
+    return reply.send(
+      rows.map((r) => ({
+        providerId: r.id,
+        name: r.name,
+        email: r.email,
+        phone: r.phone,
+        cpf: r.cpf,
+        status: r.verification_status,
+        documentUrl: r.verification_document_url ?? null,
+        selfieUrl: r.verification_selfie_url ?? null,
+        updatedAt: r.updated_at,
+      }))
+    );
+  });
+
+  app.post("/admin/provider-verifications/:providerId/decision", async (request, reply) => {
+    if (!hasKycAdminAccess(request.headers as Record<string, unknown>)) {
+      return reply.code(401).send({ message: "Nao autorizado" });
+    }
+    const paramsSchema = z.object({ providerId: z.string().uuid() });
+    const paramsParsed = paramsSchema.safeParse(request.params);
+    if (!paramsParsed.success) {
+      return reply.code(400).send({ message: "Parametros invalidos", issues: paramsParsed.error.flatten() });
+    }
+    const bodyParsed = adminDecisionSchema.safeParse(request.body);
+    if (!bodyParsed.success) {
+      return reply.code(400).send({ message: "Dados invalidos", issues: bodyParsed.error.flatten() });
+    }
+
+    const row = await providers.findVerificationByProviderId(paramsParsed.data.providerId);
+    if (!row) {
+      return reply.code(404).send({ message: "Prestador nao encontrado" });
+    }
+    if (row.role !== "provider") {
+      return reply.code(400).send({ message: "Usuario informado nao e prestador" });
+    }
+    if (!row.verification_document_url || !row.verification_selfie_url) {
+      return reply.code(400).send({ message: "Prestador sem documentos completos para decisao." });
+    }
+
+    await providers.updateVerificationAssets(paramsParsed.data.providerId, {
+      verificationStatus: bodyParsed.data.status,
+    });
+    return reply.send({
+      providerId: paramsParsed.data.providerId,
+      status: bodyParsed.data.status,
+      message: bodyParsed.data.status === "verified" ? "Prestador aprovado com sucesso." : "Prestador reprovado com sucesso.",
+    });
   });
 }

@@ -14,6 +14,8 @@ import ClientHome from "./pages/ClientHome";
 import ClientPerfil from "./pages/ClientPerfil";
 import Chat from "./pages/Chat";
 import Login from "./pages/Login";
+import AdminProviderVerifications from "./pages/AdminProviderVerifications";
+import AdminLogin from "./pages/AdminLogin";
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -31,6 +33,8 @@ const App = () => (
           <Route path="/client/perfil" element={<ClientPerfil />} />
           <Route path="/login" element={<Login />} />
           <Route path="/chat/:id" element={<Chat />} />
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/provider-verifications" element={<AdminProviderVerifications />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

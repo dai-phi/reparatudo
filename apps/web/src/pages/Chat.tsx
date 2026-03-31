@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Send, Wrench, Star, Phone, MapPin, DollarSign, Check, X, Clock } from "lucide-react";
+import { ArrowLeft, Send, Wrench, Star, Phone, MapPin, DollarSign, Check, X, Clock, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,6 +14,7 @@ import {
   confirmRequest,
   getMessages,
   getRequest,
+  reportIncident,
   sendMessage,
 } from "@/lib/api";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
@@ -71,6 +72,9 @@ const Chat = () => {
 
   const [input, setInput] = useState("");
   const [agreedValue, setAgreedValue] = useState("");
+  const [reportOpen, setReportOpen] = useState(false);
+  const [incidentType, setIncidentType] = useState<"fraude" | "conduta" | "cobranca" | "seguranca" | "outro">("outro");
+  const [incidentDescription, setIncidentDescription] = useState("");
   const messagesEnd = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -158,6 +162,24 @@ const Chat = () => {
     },
     onError: (error: unknown) => {
       const message = error instanceof ApiError ? error.message : UI_ERRORS.chat.completeService;
+      toast.error(message);
+    },
+  });
+
+  const incidentMutation = useMutation({
+    mutationFn: () =>
+      reportIncident(requestId, {
+        type: incidentType,
+        description: incidentDescription.trim(),
+      }),
+    onSuccess: () => {
+      toast.success(UI_MESSAGES.incident.submitted);
+      setReportOpen(false);
+      setIncidentDescription("");
+      setIncidentType("outro");
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : UI_ERRORS.incident.submit;
       toast.error(message);
     },
   });
@@ -293,6 +315,52 @@ const Chat = () => {
             <span className="text-xs text-muted-foreground">Valor: {request.agreedValueLabel}</span>
           )}
         </div>
+        <div className="container mt-2">
+          <Button variant="outline" size="sm" onClick={() => setReportOpen((v) => !v)}>
+            <AlertTriangle className="w-4 h-4" /> Reportar problema
+          </Button>
+        </div>
+        {reportOpen && (
+          <div className="container mt-3 rounded-lg border border-border bg-card p-3 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: "fraude", label: "Fraude" },
+                { id: "conduta", label: "Conduta" },
+                { id: "cobranca", label: "Cobrança" },
+                { id: "seguranca", label: "Segurança" },
+                { id: "outro", label: "Outro" },
+              ].map((type) => (
+                <Button
+                  key={type.id}
+                  type="button"
+                  size="sm"
+                  variant={incidentType === type.id ? "hero" : "outline"}
+                  onClick={() => setIncidentType(type.id as typeof incidentType)}
+                >
+                  {type.label}
+                </Button>
+              ))}
+            </div>
+            <Input
+              placeholder="Descreva o problema (mínimo 10 caracteres)"
+              value={incidentDescription}
+              onChange={(e) => setIncidentDescription(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="hero"
+                onClick={() => incidentMutation.mutate()}
+                disabled={incidentMutation.isPending || incidentDescription.trim().length < 10}
+              >
+                Enviar reporte
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setReportOpen(false)}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Messages */}
