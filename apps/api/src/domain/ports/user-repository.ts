@@ -29,6 +29,10 @@ export type RegisterProviderInput = {
   workLng: number;
   workAddress: string;
   passwordHash: string;
+  photoUrl?: string | null;
+  photoStorageKey?: string | null;
+  verificationDocumentUrl?: string | null;
+  verificationDocumentStorageKey?: string | null;
   createdAt: string;
   updatedAt: string;
 };

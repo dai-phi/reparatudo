@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { SERVICE_IDS } from "../../../domain/value-objects/service-id.js";
@@ -8,6 +9,10 @@ import { sanitizeUser } from "../../../application/auth/sanitize-user.js";
 import type { IUserRepository } from "../../../domain/ports/user-repository.js";
 import type { IPasswordHasher } from "../../../domain/ports/password-hasher.js";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";
+import { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
+import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
+import { parseProviderRegistrationMultipart } from "../utils/provider-registration-multipart.js";
+import { serializeUnknownError } from "../utils/serialize-error.js";
 
 const emailSchema = z.string().email();
 
@@ -109,6 +114,32 @@ async function createToken(request: FastifyRequest, userId: string, role: "clien
   return request.server.jwt.sign({ sub: userId, role });
 }
 
+function providerBodyFromMultipartFields(fields: Record<string, string>) {
+  let services: unknown;
+  try {
+    services = JSON.parse(fields.services || "[]");
+  } catch {
+    return null;
+  }
+    const cpfRaw = (fields.cpf ?? "").trim().replace(/\D/g, "");
+  return {
+    name: fields.name ?? "",
+    email: fields.email ?? "",
+    phone: fields.phone ?? "",
+    cpf: cpfRaw.length === 11 ? (fields.cpf ?? "").trim() || null : null,
+    radiusKm: Number(fields.radiusKm),
+    services,
+    workAddress: fields.workAddress ?? "",
+    workComplement: fields.workComplement?.trim() || undefined,
+    workNeighborhood: fields.workNeighborhood?.trim() || undefined,
+    workCity: fields.workCity ?? "",
+    workState: fields.workState ?? "",
+    workCep: (fields.workCep ?? "").replace(/\D/g, ""),
+    password: fields.password ?? "",
+    passwordConfirm: fields.passwordConfirm ?? "",
+  };
+}
+
 export type AuthRouteDeps = {
   users: IUserRepository;
   geo: IGeoService;
@@ -149,6 +180,90 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
   });
 
   app.post("/auth/register/provider", async (request, reply) => {
+    if (request.isMultipart()) {
+      const { fields, profilePhoto } = await parseProviderRegistrationMultipart(request);
+      const raw = providerBodyFromMultipartFields(fields);
+      if (!raw) {
+        return reply.code(400).send({ message: "Campo serviços inválido (JSON esperado)." });
+      }
+      const parsed = handleValidation(providerSchema.safeParse(raw), reply);
+      if (!parsed) return;
+
+      let media:
+        | {
+            userId: string;
+            photoUrl: string;
+            photoStorageKey: string;
+            verificationDocumentUrl: null;
+            verificationDocumentStorageKey: null;
+          }
+        | undefined;
+
+      if (profilePhoto) {
+        try {
+          assertProviderImageMime(profilePhoto.mimetype);
+          assertProviderImageSize(profilePhoto.buffer.length);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Imagem inválida";
+          return reply.code(400).send({ message: msg });
+        }
+
+        let cloudinary: CloudinaryService;
+        try {
+          cloudinary = new CloudinaryService();
+        } catch {
+          return reply.code(500).send({ message: "Serviço de imagens não configurado." });
+        }
+
+        const userId = randomUUID();
+        try {
+          const uploaded = await cloudinary.uploadBuffer(profilePhoto.buffer, {
+            folder: "teu-faz-tudo",
+            public_id: `profiles/${userId}`,
+            overwrite: true,
+            resource_type: "image",
+          });
+          media = {
+            userId,
+            photoUrl: uploaded.secure_url,
+            photoStorageKey: uploaded.public_id,
+            verificationDocumentUrl: null,
+            verificationDocumentStorageKey: null,
+          };
+        } catch (e) {
+          return reply.code(502).send({ message: serializeUnknownError(e) });
+        }
+      }
+
+      const result = await registerProvider(
+        authDeps,
+        {
+          name: parsed.name,
+          email: parsed.email,
+          phone: parsed.phone,
+          cpf: parsed.cpf,
+          radiusKm: parsed.radiusKm,
+          services: parsed.services,
+          workAddress: parsed.workAddress,
+          workComplement: parsed.workComplement,
+          workNeighborhood: parsed.workNeighborhood,
+          workCity: parsed.workCity,
+          workState: parsed.workState,
+          workCep: parsed.workCep,
+          password: parsed.password,
+        },
+        media
+      );
+
+      if ("status" in result) {
+        return reply.code(result.status).send({ message: result.message });
+      }
+
+      const token = await createToken(request, result.tokenPayload.sub, result.tokenPayload.role);
+      setAuthCookie(reply, token);
+      return reply.send({ token, user: sanitizeUser(result.user) });
+    }
+
     const parsed = handleValidation(providerSchema.safeParse(request.body), reply);
     if (!parsed) return;
 

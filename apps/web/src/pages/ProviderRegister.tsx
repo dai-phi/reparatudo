@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Wrench, Zap, Droplets, PaintBucket, Hammer, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Wrench, Zap, Droplets, PaintBucket, Hammer, ArrowLeft, CheckCircle2, Camera } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { ApiError, registerProvider, setAuth } from "@/lib/api";
@@ -20,6 +20,8 @@ import { hasFullName } from "@/lib/person-name";
 import { isValidBrazilPhone } from "@/lib/phone";
 import { fetchViaCep } from "@/lib/viacep";
 import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
+
+const ACCEPT_PROFILE_IMAGES = "image/jpeg,image/png,image/webp";
 
 const serviceOptions = [
   { id: "eletrica", icon: Zap, label: "Elétrica" },
@@ -58,6 +60,8 @@ const ProviderRegister = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [cities, setCities] = useState<string[]>([]);
   const [citiesLoading, setCitiesLoading] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null);
   const [cepLoading, setCepLoading] = useState(false);
 
   useEffect(() => {
@@ -193,6 +197,7 @@ const ProviderRegister = () => {
         workCep: workCepNumeric,
         password: form.password,
         passwordConfirm: form.passwordConfirm,
+        profilePhoto: profilePhoto ?? undefined,
       });
       setAuth(auth);
       toast.success(UI_MESSAGES.auth.providerRegisterSuccess);
@@ -286,6 +291,35 @@ const ProviderRegister = () => {
               <div>
                 <Label htmlFor="cpf">CPF (opcional)</Label>
                 <Input id="cpf" placeholder="000.000.000-00" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} />
+              </div>
+
+              <div className="rounded-xl border border-border p-4 space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-muted-foreground" />
+                  Foto de perfil (opcional)
+                </Label>
+                <p className="text-xs text-muted-foreground">JPEG, PNG ou WebP. Máx. 5 MB. Aparece no perfil após o cadastro.</p>
+                <input
+                  ref={profilePhotoInputRef}
+                  type="file"
+                  accept={ACCEPT_PROFILE_IMAGES}
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null;
+                    e.target.value = "";
+                    setProfilePhoto(f);
+                  }}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => profilePhotoInputRef.current?.click()}>
+                    {profilePhoto ? profilePhoto.name : "Escolher imagem"}
+                  </Button>
+                  {profilePhoto ? (
+                    <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => setProfilePhoto(null)}>
+                      Remover
+                    </Button>
+                  ) : null}
+                </div>
               </div>
 
               <div className="pt-2 border-t border-border">

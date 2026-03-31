@@ -15,6 +15,7 @@ export interface UserRecord {
   workLng: number | null;
   workAddress: string | null;
   photoUrl: string | null;
+  verificationDocumentUrl?: string | null;
   address: string | null;
   cpf: string | null;
   radiusKm: number | null;

@@ -290,7 +290,7 @@ export function registerClient(payload: {
   });
 }
 
-export function registerProvider(payload: {
+export async function registerProvider(payload: {
   name: string;
   email: string;
   phone: string;
@@ -305,7 +305,52 @@ export function registerProvider(payload: {
   workCep: string;
   password: string;
   passwordConfirm: string;
-}) {
+  /** Opcional: envia multipart para gravar foto no Cloudinary no cadastro. */
+  profilePhoto?: File | null;
+}): Promise<AuthResponse> {
+  if (payload.profilePhoto) {
+    const { profilePhoto, ...rest } = payload;
+    const fd = new FormData();
+    fd.append("name", rest.name);
+    fd.append("email", rest.email);
+    fd.append("phone", rest.phone);
+    if (rest.cpf) fd.append("cpf", rest.cpf);
+    fd.append("radiusKm", String(rest.radiusKm));
+    fd.append("services", JSON.stringify(rest.services));
+    fd.append("workAddress", rest.workAddress);
+    if (rest.workComplement) fd.append("workComplement", rest.workComplement);
+    if (rest.workNeighborhood) fd.append("workNeighborhood", rest.workNeighborhood);
+    fd.append("workCity", rest.workCity ?? "");
+    fd.append("workState", rest.workState ?? "");
+    fd.append("workCep", rest.workCep);
+    fd.append("password", rest.password);
+    fd.append("passwordConfirm", rest.passwordConfirm);
+    fd.append("profilePhoto", profilePhoto);
+
+    const response = await fetch(`${API_URL}/auth/register/provider`, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+      credentials: "include",
+      body: fd,
+    });
+
+    if (!response.ok) {
+      let errPayload: unknown = null;
+      try {
+        errPayload = await response.json();
+      } catch {
+        errPayload = null;
+      }
+      const message =
+        typeof errPayload === "object" && errPayload !== null && "message" in errPayload
+          ? String((errPayload as { message: unknown }).message)
+          : response.statusText || "Erro inesperado";
+      throw new ApiError(message, response.status, errPayload);
+    }
+
+    return (await response.json()) as AuthResponse;
+  }
+
   return apiFetch<AuthResponse>("/auth/register/provider", {
     method: "POST",
     body: payload,
@@ -342,6 +387,49 @@ export function updateMe(payload: {
   photoUrl?: string;
 }) {
   return apiFetch<User>("/me", { method: "PATCH", auth: true, body: payload });
+}
+
+export async function uploadMyProfilePhoto(file: File): Promise<User> {
+  const token = getToken();
+  const form = new FormData();
+  form.append("photo", file);
+
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_URL}/me/photo`, {
+    method: "POST",
+    headers,
+    credentials: "include",
+    body: form,
+  });
+
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+    if (response.status === 401) {
+      clearAuth();
+    }
+    const message =
+      typeof payload === "object" && payload !== null && "message" in payload
+        ? String((payload as { message: unknown }).message)
+        : response.statusText || "Erro inesperado";
+    throw new ApiError(message, response.status, payload);
+  }
+
+  return (await response.json()) as User;
+}
+
+export function deleteMyProfilePhoto(): Promise<User> {
+  return apiFetch<User>("/me/photo", { method: "DELETE", auth: true });
 }
 
 export function getClientHistory() {

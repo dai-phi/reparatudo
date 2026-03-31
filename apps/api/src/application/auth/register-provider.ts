@@ -29,8 +29,8 @@ export type ProviderRegistrationMedia = {
   userId: string;
   photoUrl?: string | null;
   photoStorageKey?: string | null;
-  verificationDocumentUrl: string;
-  verificationDocumentStorageKey: string;
+  verificationDocumentUrl?: string | null;
+  verificationDocumentStorageKey?: string | null;
 };
 
 export async function registerProvider(

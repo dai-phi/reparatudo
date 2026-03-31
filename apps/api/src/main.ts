@@ -4,6 +4,7 @@ import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import jwt from "@fastify/jwt";
 import websocket from "@fastify/websocket";
+import multipart from "@fastify/multipart";
 import { initDb } from "./infrastructure/persistence/init-db.js";
 import { PostgresUserRepository } from "./infrastructure/persistence/repository/postgres-user-repository.js";
 import { PostgresRequestRepository } from "./infrastructure/persistence/repository/postgres-request-repository.js";
@@ -31,6 +32,8 @@ const jwtSecret = process.env.JWT_SECRET || "dev-secret";
 await app.register(cors, {
   origin: true,
   credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 });
 
 await app.register(cookie, {
@@ -42,6 +45,10 @@ await app.register(jwt, {
 });
 
 await app.register(websocket);
+
+await app.register(multipart, {
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 const users = new PostgresUserRepository();
 const requests = new PostgresRequestRepository();
@@ -56,6 +63,12 @@ const email = createEmailSender();
 
 registerAuthenticate(app);
 registerWebSocketRoute(app, requests);
+
+app.get("/", async () => ({
+  name: "teu-faz-tudo-api",
+  health: "/health",
+  hint: "Esta é só a API REST. Em dev, abra o app em http://localhost:8080",
+}));
 
 app.get("/health", async () => ({ status: "ok" }));
 

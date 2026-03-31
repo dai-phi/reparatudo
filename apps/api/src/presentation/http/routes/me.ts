@@ -3,9 +3,13 @@ import { z } from "zod";
 import { sanitizeUser } from "../../../application/auth/sanitize-user.js";
 import { normalizePhoneDigits } from "../../../application/utils/phone-digits.js";
 import type { IUserRepository } from "../../../domain/ports/user-repository.js";
+import { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
 import { PostgresGeoService } from "../../../infrastructure/geo/postgres-geo-service.js";
 import { PostgresProfileRepository } from "../../../infrastructure/persistence/repository/postgres-profile-repository.js";
 import { PostgresUserRepository } from "../../../infrastructure/persistence/repository/postgres-user-repository.js";
+import { destroyPublicIdIfAny } from "../utils/cloudinary-helpers.js";
+import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
+import { getHttpStatusFromError, serializeUnknownError } from "../utils/serialize-error.js";
 
 const geo = new PostgresGeoService();
 
@@ -267,6 +271,146 @@ export async function registerMeRoutes(
     values.push(now);
 
     await profiles.updateById(request.user.sub, updates, values);
+    const fresh = await profiles.findById(request.user.sub);
+    if (!fresh) {
+      return reply.code(404).send({ message: "Usuário não encontrado" });
+    }
+
+    return reply.send(
+      sanitizeUser({
+        id: fresh.id,
+        role: fresh.role,
+        name: fresh.name,
+        email: fresh.email,
+        phone: fresh.phone,
+        address: fresh.address ?? null,
+        cpf: fresh.cpf ?? null,
+        radiusKm: fresh.radius_km ?? null,
+        services: fresh.services ?? null,
+        cep: fresh.cep ?? null,
+        cepLat: fresh.cep_lat ?? null,
+        cepLng: fresh.cep_lng ?? null,
+        workCep: fresh.work_cep ?? null,
+        workAddress: fresh.work_address ?? null,
+        workLat: fresh.work_lat ?? null,
+        workLng: fresh.work_lng ?? null,
+        photoUrl: fresh.photo_url ?? null,
+        passwordHash: fresh.password_hash,
+        createdAt: fresh.created_at,
+        updatedAt: fresh.updated_at,
+      })
+    );
+  });
+
+  app.post("/me/photo", { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = await profiles.findById(request.user.sub);
+    if (!user) {
+      return reply.code(404).send({ message: "Usuário não encontrado" });
+    }
+
+    const file = await request.file();
+    if (!file || file.fieldname !== "photo") {
+      return reply.code(400).send({ message: 'Envie uma imagem no campo "photo".' });
+    }
+
+    let buffer: Buffer;
+    try {
+      buffer = await file.toBuffer();
+    } catch (e) {
+      const code = getHttpStatusFromError(e) ?? 413;
+      return reply.code(code).send({ message: "Imagem muito grande ou inválida." });
+    }
+
+    try {
+      assertProviderImageMime(file.mimetype);
+      assertProviderImageSize(buffer.length);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Imagem inválida";
+      return reply.code(400).send({ message: msg });
+    }
+
+    let cloudinary: CloudinaryService;
+    try {
+      cloudinary = new CloudinaryService();
+    } catch {
+      return reply.code(500).send({ message: "Serviço de imagens não configurado." });
+    }
+
+    await destroyPublicIdIfAny(cloudinary, user.photo_storage_key ?? null);
+
+    let uploaded;
+    try {
+      uploaded = await cloudinary.uploadBuffer(buffer, {
+        folder: "teu-faz-tudo",
+        public_id: `profiles/${request.user.sub}`,
+        overwrite: true,
+        resource_type: "image",
+      });
+    } catch (e) {
+      return reply.code(502).send({ message: serializeUnknownError(e) });
+    }
+
+    const secureUrl = uploaded.secure_url;
+    const storageKey = uploaded.public_id;
+
+    const now = new Date().toISOString();
+    await profiles.updateById(request.user.sub, ["photo_url = $1", "photo_storage_key = $2", "updated_at = $3"], [
+      secureUrl,
+      storageKey,
+      now,
+    ]);
+
+    const fresh = await profiles.findById(request.user.sub);
+    if (!fresh) {
+      return reply.code(404).send({ message: "Usuário não encontrado" });
+    }
+
+    return reply.send(
+      sanitizeUser({
+        id: fresh.id,
+        role: fresh.role,
+        name: fresh.name,
+        email: fresh.email,
+        phone: fresh.phone,
+        address: fresh.address ?? null,
+        cpf: fresh.cpf ?? null,
+        radiusKm: fresh.radius_km ?? null,
+        services: fresh.services ?? null,
+        cep: fresh.cep ?? null,
+        cepLat: fresh.cep_lat ?? null,
+        cepLng: fresh.cep_lng ?? null,
+        workCep: fresh.work_cep ?? null,
+        workAddress: fresh.work_address ?? null,
+        workLat: fresh.work_lat ?? null,
+        workLng: fresh.work_lng ?? null,
+        photoUrl: fresh.photo_url ?? null,
+        passwordHash: fresh.password_hash,
+        createdAt: fresh.created_at,
+        updatedAt: fresh.updated_at,
+      })
+    );
+  });
+
+  app.delete("/me/photo", { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = await profiles.findById(request.user.sub);
+    if (!user) {
+      return reply.code(404).send({ message: "Usuário não encontrado" });
+    }
+
+    try {
+      const cloudinary = new CloudinaryService();
+      await destroyPublicIdIfAny(cloudinary, user.photo_storage_key ?? null);
+    } catch {
+      // sem credenciais Cloudinary: limpa só a BD
+    }
+
+    const now = new Date().toISOString();
+    await profiles.updateById(request.user.sub, ["photo_url = $1", "photo_storage_key = $2", "updated_at = $3"], [
+      null,
+      null,
+      now,
+    ]);
+
     const fresh = await profiles.findById(request.user.sub);
     if (!fresh) {
       return reply.code(404).send({ message: "Usuário não encontrado" });
