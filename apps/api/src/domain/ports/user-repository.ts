@@ -7,6 +7,7 @@ export type RegisterClientInput = {
   name: string;
   email: string;
   phone: string;
+  cpf: string;
   cep: string;
   cepLat: number;
   cepLng: number;
@@ -49,6 +50,8 @@ export interface IUserRepository {
   existsByEmailLower(email: string): Promise<boolean>;
   /** True if another user already has this phone (digits compared after stripping non-digits). */
   existsByPhoneDigits(phoneDigits: string, excludeUserId?: string): Promise<boolean>;
+  /** True if another user already has this CPF (digits compared after stripping non-digits). */
+  existsByCpfDigits(cpfDigits: string, excludeUserId?: string): Promise<boolean>;
   insertClient(input: RegisterClientInput): Promise<void>;
   insertProvider(input: RegisterProviderInput): Promise<void>;
   findByEmailLower(email: string): Promise<UserRecord | null>;

@@ -41,11 +41,33 @@ const cepDigitsSchema = z
 
 const passwordSchema = z.string().min(6, "Senha deve ter no mínimo 6 caracteres");
 
+function isValidCpfDigits(digits: string) {
+  if (!/^\d{11}$/.test(digits)) return false;
+  if (/^(\d)\1{10}$/.test(digits)) return false;
+  const nums = digits.split("").map((c) => Number(c));
+  const calc = (len: number) => {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += nums[i] * (len + 1 - i);
+    const mod = (sum * 10) % 11;
+    return mod === 10 ? 0 : mod;
+  };
+  const d1 = calc(9);
+  const d2 = calc(10);
+  return d1 === nums[9] && d2 === nums[10];
+}
+
+const cpfDigitsSchema = z
+  .string()
+  .transform((s) => s.replace(/\D/g, ""))
+  .pipe(z.string().length(11, { message: "CPF deve ter 11 dígitos" }))
+  .refine((d) => isValidCpfDigits(d), { message: "CPF inválido" });
+
 const clientSchema = z
   .object({
     name: fullNameSchema,
     email: emailSchema,
     phone: phoneSchema,
+    cpf: cpfDigitsSchema,
     address: z.string().min(3, "Endereco obrigatorio"),
     complement: z.string().optional().nullable(),
     neighborhood: z.string().optional().nullable(),
@@ -65,7 +87,7 @@ const providerSchema = z
     name: fullNameSchema,
     email: emailSchema,
     phone: phoneSchema,
-    cpf: z.string().min(11).optional().nullable(),
+    cpf: cpfDigitsSchema,
     radiusKm: z.coerce.number().min(1).max(50),
     services: z.array(z.enum(SERVICE_IDS)).min(1),
     workAddress: z.string().min(3, "Endereco do local de trabalho obrigatorio"),
@@ -121,12 +143,12 @@ function providerBodyFromMultipartFields(fields: Record<string, string>) {
   } catch {
     return null;
   }
-    const cpfRaw = (fields.cpf ?? "").trim().replace(/\D/g, "");
+  const cpfRaw = (fields.cpf ?? "").trim().replace(/\D/g, "");
   return {
     name: fields.name ?? "",
     email: fields.email ?? "",
     phone: fields.phone ?? "",
-    cpf: cpfRaw.length === 11 ? (fields.cpf ?? "").trim() || null : null,
+    cpf: cpfRaw,
     radiusKm: Number(fields.radiusKm),
     services,
     workAddress: fields.workAddress ?? "",
@@ -161,6 +183,7 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
       name: parsed.name,
       email: parsed.email,
       phone: parsed.phone,
+      cpf: parsed.cpf,
       address: parsed.address,
       complement: parsed.complement,
       neighborhood: parsed.neighborhood,

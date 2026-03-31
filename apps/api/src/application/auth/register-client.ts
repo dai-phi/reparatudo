@@ -10,6 +10,7 @@ export type RegisterClientInput = {
   name: string;
   email: string;
   phone: string;
+  cpf: string;
   address: string;
   complement?: string | null;
   neighborhood?: string | null;
@@ -37,12 +38,19 @@ export async function registerClient(
   const email = input.email.toLowerCase();
   const phone = input.phone.trim();
   const phoneDigits = normalizePhoneDigits(phone);
+  const cpfDigits = input.cpf.trim().replace(/\D/g, "");
 
   if (await deps.users.existsByEmailLower(email)) {
     return { status: 409, message: "E-mail ja cadastrado" };
   }
   if (phoneDigits.length >= 8 && (await deps.users.existsByPhoneDigits(phoneDigits))) {
     return { status: 409, message: "Telefone já cadastrado" };
+  }
+  if (cpfDigits.length !== 11) {
+    return { status: 400, message: "CPF invalido" };
+  }
+  if (await deps.users.existsByCpfDigits(cpfDigits)) {
+    return { status: 409, message: "CPF ja cadastrado" };
   }
 
   const now = new Date().toISOString();
@@ -71,19 +79,32 @@ export async function registerClient(
   const userId = randomUUID();
   const passwordHash = await deps.passwordHasher.hash(input.password);
 
-  await deps.users.insertClient({
-    id: userId,
-    name: input.name.trim(),
-    email,
-    phone,
-    cep,
-    cepLat: coords.lat,
-    cepLng: coords.lng,
-    address: fullAddress,
-    passwordHash,
-    createdAt: now,
-    updatedAt: now,
-  });
+  try {
+    await deps.users.insertClient({
+      id: userId,
+      name: input.name.trim(),
+      email,
+      phone,
+      cpf: cpfDigits,
+      cep,
+      cepLat: coords.lat,
+      cepLng: coords.lng,
+      address: fullAddress,
+      passwordHash,
+      createdAt: now,
+      updatedAt: now,
+    });
+  } catch (e) {
+    if (
+      typeof e === "object" &&
+      e !== null &&
+      "code" in e &&
+      (e as { code?: unknown }).code === "23505"
+    ) {
+      return { status: 409, message: "CPF ja cadastrado" };
+    }
+    throw e;
+  }
 
   const user: UserRecord = {
     id: userId,
@@ -101,7 +122,7 @@ export async function registerClient(
     photoUrl: null,
     verificationDocumentUrl: null,
     address: fullAddress,
-    cpf: null,
+    cpf: cpfDigits,
     radiusKm: null,
     services: null,
     passwordHash,

@@ -4,6 +4,43 @@ export async function initDb() {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL nao definido");
   }
+  // Legacy data cleanup to allow adding CPF uniqueness.
+  // - Normalize CPF to digits only
+  // - If duplicates exist, keep the oldest row's CPF and clear the others
+  await pool.query(`
+    DO $$
+    DECLARE
+      missing_provider_cpf_count integer;
+    BEGIN
+      IF to_regclass('public.users') IS NOT NULL THEN
+        UPDATE users
+        SET cpf = regexp_replace(cpf, '[^0-9]', '', 'g')
+        WHERE cpf IS NOT NULL AND cpf <> regexp_replace(cpf, '[^0-9]', '', 'g');
+
+        WITH ranked AS (
+          SELECT
+            id,
+            cpf,
+            ROW_NUMBER() OVER (PARTITION BY cpf ORDER BY created_at ASC, id ASC) AS rn
+          FROM users
+          WHERE cpf IS NOT NULL AND cpf <> ''
+        )
+        UPDATE users u
+        SET cpf = NULL
+        FROM ranked r
+        WHERE u.id = r.id AND r.rn > 1;
+
+        SELECT COUNT(*) INTO missing_provider_cpf_count
+        FROM users
+        WHERE role = 'provider' AND (cpf IS NULL OR cpf = '');
+
+        IF missing_provider_cpf_count > 0 THEN
+          RAISE EXCEPTION 'Existem % prestador(es) sem CPF no banco. Corrija/complete o CPF desses usuários antes de continuar.', missing_provider_cpf_count;
+        END IF;
+      END IF;
+    END $$;
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -77,6 +114,9 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_requests_client ON requests(client_id);
     CREATE INDEX IF NOT EXISTS idx_messages_request ON messages(request_id);
     CREATE INDEX IF NOT EXISTS idx_ratings_provider ON ratings(provider_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS users_cpf_unique ON users (cpf) WHERE cpf IS NOT NULL;
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_provider_cpf_required;
+    ALTER TABLE users ADD CONSTRAINT users_provider_cpf_required CHECK (role <> 'provider' OR (cpf IS NOT NULL AND cpf <> ''));
 
     CREATE TABLE IF NOT EXISTS provider_payments (
       id TEXT PRIMARY KEY,

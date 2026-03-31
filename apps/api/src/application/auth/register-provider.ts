@@ -12,7 +12,7 @@ export type RegisterProviderFormInput = {
   name: string;
   email: string;
   phone: string;
-  cpf?: string | null;
+  cpf: string;
   radiusKm: number;
   services: ServiceId[];
   workAddress: string;
@@ -45,12 +45,19 @@ export async function registerProvider(
   const email = input.email.toLowerCase();
   const phone = input.phone.trim();
   const phoneDigits = normalizePhoneDigits(phone);
+  const cpfDigits = input.cpf.trim().replace(/\D/g, "");
 
   if (await deps.users.existsByEmailLower(email)) {
     return { status: 409, message: "E-mail ja cadastrado" };
   }
   if (phoneDigits.length >= 8 && (await deps.users.existsByPhoneDigits(phoneDigits))) {
     return { status: 409, message: "Telefone ja cadastrado" };
+  }
+  if (cpfDigits.length !== 11) {
+    return { status: 400, message: "CPF invalido" };
+  }
+  if (await deps.users.existsByCpfDigits(cpfDigits)) {
+    return { status: 409, message: "CPF ja cadastrado" };
   }
 
   const now = new Date().toISOString();
@@ -82,26 +89,38 @@ export async function registerProvider(
   const userId = media?.userId ?? randomUUID();
   const passwordHash = await deps.passwordHasher.hash(input.password);
 
-  await deps.users.insertProvider({
-    id: userId,
-    name: input.name.trim(),
-    email,
-    phone,
-    cpf: input.cpf?.trim() || null,
-    radiusKm: input.radiusKm,
-    services: input.services,
-    workCep,
-    workLat: coords.lat,
-    workLng: coords.lng,
-    workAddress: workAddressFull,
-    passwordHash,
-    photoUrl: media?.photoUrl ?? null,
-    photoStorageKey: media?.photoStorageKey ?? null,
-    verificationDocumentUrl: media?.verificationDocumentUrl ?? null,
-    verificationDocumentStorageKey: media?.verificationDocumentStorageKey ?? null,
-    createdAt: now,
-    updatedAt: now,
-  });
+  try {
+    await deps.users.insertProvider({
+      id: userId,
+      name: input.name.trim(),
+      email,
+      phone,
+      cpf: cpfDigits,
+      radiusKm: input.radiusKm,
+      services: input.services,
+      workCep,
+      workLat: coords.lat,
+      workLng: coords.lng,
+      workAddress: workAddressFull,
+      passwordHash,
+      photoUrl: media?.photoUrl ?? null,
+      photoStorageKey: media?.photoStorageKey ?? null,
+      verificationDocumentUrl: media?.verificationDocumentUrl ?? null,
+      verificationDocumentStorageKey: media?.verificationDocumentStorageKey ?? null,
+      createdAt: now,
+      updatedAt: now,
+    });
+  } catch (e) {
+    if (
+      typeof e === "object" &&
+      e !== null &&
+      "code" in e &&
+      (e as { code?: unknown }).code === "23505"
+    ) {
+      return { status: 409, message: "CPF ja cadastrado" };
+    }
+    throw e;
+  }
 
   const user: UserRecord = {
     id: userId,
@@ -119,7 +138,7 @@ export async function registerProvider(
     photoUrl: media?.photoUrl ?? null,
     verificationDocumentUrl: media?.verificationDocumentUrl ?? null,
     address: null,
-    cpf: input.cpf?.trim() || null,
+    cpf: cpfDigits,
     radiusKm: input.radiusKm,
     services: input.services,
     passwordHash,

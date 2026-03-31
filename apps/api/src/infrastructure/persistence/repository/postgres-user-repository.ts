@@ -59,16 +59,36 @@ export class PostgresUserRepository implements IUserRepository {
     return Boolean(result.rowCount);
   }
 
+  async existsByCpfDigits(cpfDigits: string, excludeUserId?: string): Promise<boolean> {
+    if (cpfDigits.length !== 11) return false;
+    if (excludeUserId) {
+      const result = await this.db.query(
+        `SELECT 1 FROM users
+         WHERE regexp_replace(coalesce(cpf, ''), '[^0-9]', '', 'g') = $1
+         AND id <> $2`,
+        [cpfDigits, excludeUserId]
+      );
+      return Boolean(result.rowCount);
+    }
+    const result = await this.db.query(
+      `SELECT 1 FROM users
+       WHERE regexp_replace(coalesce(cpf, ''), '[^0-9]', '', 'g') = $1`,
+      [cpfDigits]
+    );
+    return Boolean(result.rowCount);
+  }
+
   async insertClient(input: RegisterClientInput): Promise<void> {
     await this.db.query(
-      `INSERT INTO users (id, role, name, email, phone, cep, cep_lat, cep_lng, address, password_hash, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      `INSERT INTO users (id, role, name, email, phone, cpf, cep, cep_lat, cep_lng, address, password_hash, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
       [
         input.id,
         "client",
         input.name,
         input.email,
         input.phone,
+        input.cpf,
         input.cep,
         input.cepLat,
         input.cepLng,

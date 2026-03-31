@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,64 @@ function formatCepInput(v: string) {
   return `${d.slice(0, 5)}-${d.slice(5)}`;
 }
 
+function formatBrazilPhoneInput(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  const ddd = d.slice(0, 2);
+  const rest = d.slice(2);
+  if (d.length === 0) return "";
+  if (d.length < 3) return `(${ddd}`;
+  if (rest.length <= 4) return `(${ddd}) ${rest}`;
+  if (rest.length <= 8) return `(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+  return `(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
+}
+
+function formatCpfInput(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
+function isValidCpfDigits(digits: string) {
+  if (!/^\d{11}$/.test(digits)) return false;
+  if (/^(\d)\1{10}$/.test(digits)) return false;
+  const nums = digits.split("").map((c) => Number(c));
+  const calc = (len: number) => {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += nums[i] * (len + 1 - i);
+    const mod = (sum * 10) % 11;
+    return mod === 10 ? 0 : mod;
+  };
+  const d1 = calc(9);
+  const d2 = calc(10);
+  return d1 === nums[9] && d2 === nums[10];
+}
+
+function getPasswordStrength(password: string) {
+  const p = password ?? "";
+  const lengthOk = p.length >= 8;
+  const hasLower = /[a-z]/.test(p);
+  const hasUpper = /[A-Z]/.test(p);
+  const hasNumber = /\d/.test(p);
+  const hasSpecial = /[^A-Za-z0-9]/.test(p);
+  const variety = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
+
+  const score =
+    (lengthOk ? 2 : p.length >= 6 ? 1 : 0) +
+    (variety >= 3 ? 2 : variety === 2 ? 1 : 0);
+
+  const level = score >= 4 ? "forte" : score >= 3 ? "boa" : score >= 2 ? "fraca" : "muito fraca";
+  const colorClass =
+    level === "forte"
+      ? "text-emerald-600"
+      : level === "boa"
+        ? "text-amber-600"
+        : "text-destructive";
+
+  return { lengthOk, hasLower, hasUpper, hasNumber, hasSpecial, variety, score, level, colorClass };
+}
+
 const ProviderRegister = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
@@ -47,7 +105,8 @@ const ProviderRegister = () => {
     phone: "",
     cpf: "",
     radius: "10",
-    workAddress: "",
+    workStreet: "",
+    workNumber: "",
     workComplement: "",
     workNeighborhood: "",
     workCity: "",
@@ -63,6 +122,44 @@ const ProviderRegister = () => {
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
   const profilePhotoInputRef = useRef<HTMLInputElement>(null);
   const [cepLoading, setCepLoading] = useState(false);
+  const [cepNeedsStreet, setCepNeedsStreet] = useState(false);
+  const [cpfTouched, setCpfTouched] = useState(false);
+
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const passwordStrength = useMemo(() => getPasswordStrength(form.password), [form.password]);
+
+  const inputErrorClass = (key: string) =>
+    errors[key] ? "border-destructive focus-visible:ring-destructive" : "";
+  const selectErrorClass = (key: string) =>
+    errors[key] ? "border-destructive focus-visible:ring-destructive" : "";
+
+  const getCpfError = (cpfDigits: string) => {
+    if (!cpfDigits) return "CPF é obrigatório";
+    if (cpfDigits.length < 11) return "CPF deve ter 11 dígitos";
+    if (cpfDigits.length > 11) return "CPF deve ter 11 dígitos";
+    if (!isValidCpfDigits(cpfDigits)) return "CPF inválido";
+    return null;
+  };
+
+  const syncCpfError = (cpfDigits: string) => {
+    const err = getCpfError(cpfDigits);
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (err) next.cpf = err;
+      else delete next.cpf;
+      return next;
+    });
+  };
+
+  const syncPasswordConfirmError = (nextPassword: string, nextConfirm: string) => {
+    const mismatch = nextConfirm.length > 0 && nextPassword !== nextConfirm;
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (mismatch) next.passwordConfirm = "As senhas não conferem";
+      else delete next.passwordConfirm;
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!form.workState) {
@@ -90,36 +187,73 @@ const ProviderRegister = () => {
   }, [form.workState]);
 
   const toggleService = (id: string) => {
-    setSelectedServices((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-    );
+    setSelectedServices((prev) => {
+      const next = prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id];
+      if (next.length > 0) {
+        setErrors((old) => {
+          const copy = { ...old };
+          delete copy.services;
+          return copy;
+        });
+      }
+      return next;
+    });
+  };
+
+  const focusFirstError = (e: Record<string, string>) => {
+    const order = [
+      "name",
+      "email",
+      "phone",
+      "cpf",
+      "workCep",
+      "workStreet",
+      "workNumber",
+      "workNeighborhood",
+      "password",
+      "passwordConfirm",
+      "services",
+    ];
+    const first = order.find((k) => e[k]);
+    if (!first) return;
+    const el = inputRefs.current[first];
+    if (el && typeof el.focus === "function") {
+      el.focus();
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
   };
 
   const validatePasswords = () => {
     const e: Record<string, string> = {};
-    if (form.password.length > 0 && form.password.length < 6) {
-      e.password = "Senha deve ter no mínimo 6 caracteres";
+    if (form.password && (passwordStrength.score < 3 || passwordStrength.variety < 3 || !passwordStrength.lengthOk)) {
+      e.password = "Senha fraca. Use no mínimo 8 caracteres e combine 3 itens: maiúscula, minúscula, número, símbolo.";
     }
     if (form.passwordConfirm && form.password !== form.passwordConfirm) {
       e.passwordConfirm = "As senhas não conferem";
     }
     setErrors(e);
-    return Object.keys(e).length === 0;
+    return { ok: Object.keys(e).length === 0, errors: e };
   };
 
   const validateStep1 = () => {
     const e: Record<string, string> = {};
     if (!hasFullName(form.name)) e.name = "Informe nome completo (nome e sobrenome)";
     if (!isValidBrazilPhone(form.phone)) e.phone = "Telefone inválido: use DDD + número (10 ou 11 dígitos)";
+    const cpfDigits = form.cpf.replace(/\D/g, "");
+    const cpfErr = getCpfError(cpfDigits);
+    if (cpfErr) e.cpf = cpfErr;
     if (!form.workState) e.workState = "Selecione o estado";
     if (!form.workCity) e.workCity = "Selecione a cidade";
     const cepDigits = form.workCep.replace(/\D/g, "");
     if (cepDigits.length !== 8) e.workCep = "CEP deve ter 8 dígitos";
-    if (!form.workAddress.trim()) e.workAddress = "Endereço obrigatório";
-    if (form.password.length > 0 && form.password.length < 6) e.password = "Senha deve ter no mínimo 6 caracteres";
+    if (!form.workStreet.trim()) e.workStreet = "Informe o logradouro (rua/avenida)";
+    if (!form.workNumber.trim()) e.workNumber = "Informe o número";
+    if (form.password && (passwordStrength.score < 3 || passwordStrength.variety < 3 || !passwordStrength.lengthOk)) {
+      e.password = "Senha fraca. Use no mínimo 8 caracteres e combine 3 itens: maiúscula, minúscula, número, símbolo.";
+    }
     if (form.passwordConfirm && form.password !== form.passwordConfirm) e.passwordConfirm = "As senhas não conferem";
     setErrors(e);
-    return Object.keys(e).length === 0;
+    return { ok: Object.keys(e).length === 0, errors: e };
   };
 
   const lookupWorkCep = async () => {
@@ -147,9 +281,10 @@ const ProviderRegister = () => {
         ...f,
         workState: data.uf,
         workCity: cityValue,
-        workAddress: data.logradouro ? data.logradouro : f.workAddress,
+        workStreet: data.logradouro ? data.logradouro : f.workStreet,
         workNeighborhood: data.bairro ? data.bairro : f.workNeighborhood,
       }));
+      setCepNeedsStreet(!data.logradouro);
       toast.success("Endereço encontrado pelo CEP");
     } catch {
       setErrors((prev) => ({ ...prev, workCep: "Não foi possível buscar o CEP" }));
@@ -159,18 +294,33 @@ const ProviderRegister = () => {
   };
 
   const goStep2 = () => {
-    if (!validateStep1()) {
+    const result = validateStep1();
+    if (!result.ok) {
       toast.error("Corrija os campos destacados.");
+      focusFirstError(result.errors);
       return;
     }
     setStep(2);
   };
 
   const handleSubmit = async () => {
-    if (!validatePasswords()) return;
-    if (!hasFullName(form.name) || !isValidBrazilPhone(form.phone) || !form.workState || !form.workCity) {
+    const passResult = validatePasswords();
+    if (!passResult.ok) {
+      focusFirstError(passResult.errors);
+      return;
+    }
+    const step1Result = validateStep1();
+    if (!step1Result.ok) {
       toast.error("Revise seus dados no passo anterior.");
       setStep(1);
+      focusFirstError(step1Result.errors);
+      return;
+    }
+    if (selectedServices.length === 0) {
+      const next = { services: "Selecione ao menos um serviço" };
+      setErrors((prev) => ({ ...prev, ...next }));
+      toast.error("Selecione ao menos um serviço para continuar.");
+      focusFirstError(next);
       return;
     }
     const workCepNumeric = form.workCep.replace(/\D/g, "");
@@ -180,16 +330,30 @@ const ProviderRegister = () => {
       setStep(1);
       return;
     }
+    if (!via.logradouro) {
+      setCepNeedsStreet(true);
+      if (!form.workStreet.trim()) {
+        setErrors((prev) => ({
+          ...prev,
+          workStreet: "Informe o logradouro (ViaCEP não retornou rua para este CEP)",
+        }));
+        toast.error("Preencha o logradouro manualmente (ViaCEP não retornou a rua).");
+        setStep(1);
+        return;
+      }
+    }
     setLoading(true);
     try {
+      const cpfDigits = form.cpf.replace(/\D/g, "");
+      const workAddressCombined = `${form.workStreet.trim()}, ${form.workNumber.trim()}`;
       const auth = await registerProvider({
         name: form.name.trim(),
         email: form.email.trim(),
         phone: form.phone.trim(),
-        cpf: form.cpf.trim() || undefined,
+        cpf: cpfDigits,
         radiusKm: Number(form.radius) || 10,
         services: selectedServices,
-        workAddress: form.workAddress.trim(),
+        workAddress: workAddressCombined,
         workComplement: form.workComplement.trim() || undefined,
         workNeighborhood: form.workNeighborhood.trim() || undefined,
         workCity: form.workCity.trim(),
@@ -209,21 +373,6 @@ const ProviderRegister = () => {
       setLoading(false);
     }
   };
-
-  const step1Ok =
-    form.name &&
-    hasFullName(form.name) &&
-    form.email &&
-    form.phone &&
-    isValidBrazilPhone(form.phone) &&
-    form.workAddress.trim() &&
-    form.workState &&
-    form.workCity &&
-    form.workCep.replace(/\D/g, "").length === 8 &&
-    form.password &&
-    form.password.length >= 6 &&
-    form.passwordConfirm &&
-    form.password === form.passwordConfirm;
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -254,7 +403,7 @@ const ProviderRegister = () => {
 
       <div className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
         <motion.div
-          className="w-full max-w-md py-6"
+          className="w-full max-w-md"
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
         >
@@ -263,9 +412,11 @@ const ProviderRegister = () => {
           </Link>
 
           <h1 className="font-display text-2xl font-bold text-foreground mb-1">
-            {step === 1 ? "Dados Pessoais" : "Serviços Oferecidos"}
+            {step === 1 ? "Dados pessoais" : "Serviços oferecidos"}
           </h1>
-          <p className="text-muted-foreground mb-6">Passo {step} de 2</p>
+          <p className="text-muted-foreground mb-6">
+            {step === 1 ? "Passo 1 de 2 - Dados de cadastro" : "Passo 2 de 2 - Serviços e área de atuação"}
+          </p>
 
           <div className="flex gap-2 mb-6">
             <div className={`h-1.5 flex-1 rounded-full ${step >= 1 ? "bg-accent" : "bg-muted"}`} />
@@ -273,24 +424,85 @@ const ProviderRegister = () => {
           </div>
 
           {step === 1 ? (
-            <div className="space-y-4">
+            <form
+              className="space-y-4"
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                goStep2();
+              }}
+            >
               <div>
                 <Label htmlFor="name">Nome completo</Label>
-                <Input id="name" placeholder="Ex.: Luis Silva" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <Input
+                  id="name"
+                  placeholder="Ex.: Luis Silva"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  aria-invalid={Boolean(errors.name)}
+                  className={inputErrorClass("name")}
+                  ref={(el) => {
+                    inputRefs.current.name = el;
+                  }}
+                />
                 {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
               </div>
               <div>
                 <Label htmlFor="email">E-mail</Label>
-                <Input id="email" type="email" placeholder="seu@email.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  aria-invalid={Boolean(errors.email)}
+                  className={inputErrorClass("email")}
+                  ref={(el) => {
+                    inputRefs.current.email = el;
+                  }}
+                />
               </div>
               <div>
                 <Label htmlFor="phone">Telefone</Label>
-                <Input id="phone" placeholder="(11) 99999-9999" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <Input
+                  id="phone"
+                  placeholder="(11) 99999-9999"
+                  value={form.phone}
+                  inputMode="tel"
+                  autoComplete="tel"
+                  onChange={(e) => setForm({ ...form, phone: formatBrazilPhoneInput(e.target.value) })}
+                  aria-invalid={Boolean(errors.phone)}
+                  className={inputErrorClass("phone")}
+                  ref={(el) => {
+                    inputRefs.current.phone = el;
+                  }}
+                />
                 {errors.phone && <p className="text-xs text-destructive mt-1">{errors.phone}</p>}
               </div>
               <div>
-                <Label htmlFor="cpf">CPF (opcional)</Label>
-                <Input id="cpf" placeholder="000.000.000-00" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} />
+                <Label htmlFor="cpf">CPF *</Label>
+                <Input
+                  id="cpf"
+                  placeholder="000.000.000-00"
+                  value={form.cpf}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  onChange={(e) => {
+                    const masked = formatCpfInput(e.target.value);
+                    setForm((f) => ({ ...f, cpf: masked }));
+                    if (cpfTouched) syncCpfError(masked.replace(/\D/g, ""));
+                  }}
+                  onBlur={() => {
+                    setCpfTouched(true);
+                    syncCpfError(form.cpf.replace(/\D/g, ""));
+                  }}
+                  aria-invalid={Boolean(errors.cpf)}
+                  className={inputErrorClass("cpf")}
+                  ref={(el) => {
+                    inputRefs.current.cpf = el;
+                  }}
+                />
+                {errors.cpf && <p className="text-xs text-destructive mt-1">{errors.cpf}</p>}
               </div>
 
               <div className="rounded-xl border border-border p-4 space-y-2">
@@ -321,7 +533,36 @@ const ProviderRegister = () => {
                   ) : null}
                 </div>
               </div>
-
+              <div>
+                <Label htmlFor="workCep">CEP</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="workCep"
+                    placeholder="00000-000"
+                    value={form.workCep}
+                    onChange={(e) => setForm({ ...form, workCep: formatCepInput(e.target.value) })}
+                    onBlur={() => {
+                      if (form.workCep.replace(/\D/g, "").length === 8) void lookupWorkCep();
+                    }}
+                    inputMode="numeric"
+                    autoComplete="postal-code"
+                    aria-invalid={Boolean(errors.workCep)}
+                    className={inputErrorClass("workCep")}
+                    ref={(el) => {
+                      inputRefs.current.workCep = el;
+                    }}
+                  />
+                  <Button type="button" variant="outline" disabled={cepLoading} onClick={() => void lookupWorkCep()}>
+                    {cepLoading ? "…" : "Buscar"}
+                  </Button>
+                </div>
+                {errors.workCep && <p className="text-xs text-destructive mt-1">{errors.workCep}</p>}
+                {cepNeedsStreet ? (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Este CEP não retornou logradouro no ViaCEP. Preencha a rua/avenida manualmente.
+                  </p>
+                ) : null}
+              </div>
               <div className="pt-2 border-t border-border">
                 <p className="text-sm font-medium text-foreground mb-3">Endereço do local de trabalho</p>
                 <div className="space-y-3">
@@ -331,7 +572,7 @@ const ProviderRegister = () => {
                       value={form.workState || undefined}
                       onValueChange={(v) => setForm((f) => ({ ...f, workState: v, workCity: "" }))}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className={selectErrorClass("workState")}>
                         <SelectValue placeholder="Selecione o estado" />
                       </SelectTrigger>
                       <SelectContent>
@@ -351,7 +592,7 @@ const ProviderRegister = () => {
                       onValueChange={(v) => setForm((f) => ({ ...f, workCity: v }))}
                       disabled={!form.workState || citiesLoading}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className={selectErrorClass("workCity")}>
                         <SelectValue
                           placeholder={
                             form.workState ? (citiesLoading ? "Carregando…" : "Selecione a cidade") : "Selecione o estado primeiro"
@@ -369,32 +610,35 @@ const ProviderRegister = () => {
                     {errors.workCity && <p className="text-xs text-destructive mt-1">{errors.workCity}</p>}
                   </div>
                   <div>
-                    <Label htmlFor="workCep">CEP</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="workCep"
-                        placeholder="00000-000"
-                        value={form.workCep}
-                        onChange={(e) => setForm({ ...form, workCep: formatCepInput(e.target.value) })}
-                        onBlur={() => {
-                          if (form.workCep.replace(/\D/g, "").length === 8) void lookupWorkCep();
-                        }}
-                      />
-                      <Button type="button" variant="outline" disabled={cepLoading} onClick={() => void lookupWorkCep()}>
-                        {cepLoading ? "…" : "Buscar"}
-                      </Button>
-                    </div>
-                    {errors.workCep && <p className="text-xs text-destructive mt-1">{errors.workCep}</p>}
+                    <Label htmlFor="workStreet">Logradouro (rua/avenida) *</Label>
+                    <Input
+                      id="workStreet"
+                      placeholder="Ex.: Rua das Flores"
+                      value={form.workStreet}
+                      onChange={(e) => setForm({ ...form, workStreet: e.target.value })}
+                      aria-invalid={Boolean(errors.workStreet)}
+                      className={inputErrorClass("workStreet")}
+                      ref={(el) => {
+                        inputRefs.current.workStreet = el;
+                      }}
+                    />
+                    {errors.workStreet && <p className="text-xs text-destructive mt-1">{errors.workStreet}</p>}
                   </div>
                   <div>
-                    <Label htmlFor="workAddress">Rua e número *</Label>
+                    <Label htmlFor="workNumber">Número *</Label>
                     <Input
-                      id="workAddress"
-                      placeholder="Rua, número"
-                      value={form.workAddress}
-                      onChange={(e) => setForm({ ...form, workAddress: e.target.value })}
+                      id="workNumber"
+                      placeholder="Ex.: 123"
+                      value={form.workNumber}
+                      onChange={(e) => setForm({ ...form, workNumber: e.target.value })}
+                      inputMode="numeric"
+                      aria-invalid={Boolean(errors.workNumber)}
+                      className={inputErrorClass("workNumber")}
+                      ref={(el) => {
+                        inputRefs.current.workNumber = el;
+                      }}
                     />
-                    {errors.workAddress && <p className="text-xs text-destructive mt-1">{errors.workAddress}</p>}
+                    {errors.workNumber && <p className="text-xs text-destructive mt-1">{errors.workNumber}</p>}
                   </div>
                   <div>
                     <Label htmlFor="workComplement">Complemento (opcional)</Label>
@@ -412,11 +656,33 @@ const ProviderRegister = () => {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres"
                   value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  onChange={(e) => {
+                    const nextPassword = e.target.value;
+                    setForm((f) => ({ ...f, password: nextPassword }));
+                    syncPasswordConfirmError(nextPassword, form.passwordConfirm);
+                  }}
                   required
+                  autoComplete="new-password"
+                  aria-invalid={Boolean(errors.password)}
+                  className={inputErrorClass("password")}
+                  ref={(el) => {
+                    inputRefs.current.password = el;
+                  }}
                 />
+                <div className="mt-2 space-y-1">
+                  <p className={`text-xs ${passwordStrength.colorClass}`}>
+                    Força: <span className="font-medium">{passwordStrength.level}</span>
+                  </p>
+                  <ul className="text-xs text-muted-foreground space-y-0.5">
+                    <li className={passwordStrength.lengthOk ? "text-emerald-600" : ""}>- Pelo menos 8 caracteres</li>
+                    <li className={passwordStrength.hasUpper ? "text-emerald-600" : ""}>- 1 letra maiúscula</li>
+                    <li className={passwordStrength.hasLower ? "text-emerald-600" : ""}>- 1 letra minúscula</li>
+                    <li className={passwordStrength.hasNumber ? "text-emerald-600" : ""}>- 1 número</li>
+                    <li className={passwordStrength.hasSpecial ? "text-emerald-600" : ""}>- 1 símbolo</li>
+                  </ul>
+                </div>
                 {errors.password && <p className="text-xs text-destructive mt-1">{errors.password}</p>}
               </div>
               <div>
@@ -426,20 +692,33 @@ const ProviderRegister = () => {
                   type="password"
                   placeholder="Repita a senha"
                   value={form.passwordConfirm}
-                  onChange={(e) => setForm({ ...form, passwordConfirm: e.target.value })}
+                  onChange={(e) => {
+                    const nextConfirm = e.target.value;
+                    setForm((f) => ({ ...f, passwordConfirm: nextConfirm }));
+                    syncPasswordConfirmError(form.password, nextConfirm);
+                  }}
+                  onBlur={() => {
+                    syncPasswordConfirmError(form.password, form.passwordConfirm);
+                  }}
                   required
+                  autoComplete="new-password"
+                  aria-invalid={Boolean(errors.passwordConfirm)}
+                  className={inputErrorClass("passwordConfirm")}
+                  ref={(el) => {
+                    inputRefs.current.passwordConfirm = el;
+                  }}
                 />
                 {errors.passwordConfirm && <p className="text-xs text-destructive mt-1">{errors.passwordConfirm}</p>}
               </div>
 
-              <Button className="w-full" size="lg" onClick={goStep2} disabled={!step1Ok}>
+              <Button className="w-full" size="lg" variant="hero" type="submit">
                 Continuar
               </Button>
-            </div>
+            </form>
           ) : (
             <div className="space-y-6">
               <div>
-                <Label className="mb-3 block">Selecione seus serviços</Label>
+                <Label className="mb-3 block">Selecione os serviços que você oferece</Label>
                 <div className="grid grid-cols-2 gap-3">
                   {serviceOptions.map((service) => {
                     const selected = selectedServices.includes(service.id);
@@ -460,6 +739,7 @@ const ProviderRegister = () => {
                     );
                   })}
                 </div>
+                {errors.services && <p className="text-xs text-destructive mt-2">{errors.services}</p>}
               </div>
               <div>
                 <Label htmlFor="radius">Raio de atuação (km)</Label>
@@ -476,7 +756,7 @@ const ProviderRegister = () => {
                 <Button variant="outline" className="flex-1" size="lg" onClick={() => setStep(1)}>
                   Voltar
                 </Button>
-                <Button variant="hero" className="flex-1" size="lg" onClick={() => void handleSubmit()} disabled={selectedServices.length === 0 || loading}>
+                <Button variant="hero" className="flex-1" size="lg" onClick={() => void handleSubmit()} disabled={loading}>
                   Cadastrar
                 </Button>
               </div>

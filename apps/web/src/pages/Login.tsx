@@ -15,6 +15,10 @@ const Login = () => {
   const { data: user, isLoading } = useAuthUser();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const inputErrorClass = (key: string) =>
+    errors[key] ? "border-destructive focus-visible:ring-destructive" : "";
 
   useEffect(() => {
     if (isLoading || !user) return;
@@ -23,6 +27,12 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const nextErrors: Record<string, string> = {};
+    if (!form.email.trim()) nextErrors.email = "Informe seu e-mail";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) nextErrors.email = "E-mail inválido";
+    if (!form.password) nextErrors.password = "Informe sua senha";
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
     setLoading(true);
     try {
       const auth = await login({ email: form.email.trim(), password: form.password });
@@ -79,7 +89,7 @@ const Login = () => {
           <h1 className="font-display text-2xl font-bold text-foreground mb-1">Entrar</h1>
           <p className="text-muted-foreground mb-8">Acesse sua conta</p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div>
               <Label htmlFor="email">E-mail</Label>
               <Input
@@ -88,8 +98,10 @@ const Login = () => {
                 placeholder="seu@email.com"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                required
+                aria-invalid={Boolean(errors.email)}
+                className={inputErrorClass("email")}
               />
+              {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
             </div>
             <div>
               <Label htmlFor="password">Senha</Label>
@@ -99,8 +111,10 @@ const Login = () => {
                 placeholder="Sua senha"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                required
+                aria-invalid={Boolean(errors.password)}
+                className={inputErrorClass("password")}
               />
+              {errors.password && <p className="text-xs text-destructive mt-1">{errors.password}</p>}
             </div>
             <Button variant="hero" size="lg" className="w-full" type="submit" disabled={loading}>
               Entrar

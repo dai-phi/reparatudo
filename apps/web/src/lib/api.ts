@@ -275,6 +275,7 @@ export function registerClient(payload: {
   name: string;
   email: string;
   phone: string;
+  cpf: string;
   address: string;
   complement?: string;
   neighborhood?: string;
@@ -294,7 +295,7 @@ export async function registerProvider(payload: {
   name: string;
   email: string;
   phone: string;
-  cpf?: string;
+  cpf: string;
   radiusKm: number;
   services: string[];
   workAddress: string;
@@ -314,7 +315,7 @@ export async function registerProvider(payload: {
     fd.append("name", rest.name);
     fd.append("email", rest.email);
     fd.append("phone", rest.phone);
-    if (rest.cpf) fd.append("cpf", rest.cpf);
+    fd.append("cpf", rest.cpf);
     fd.append("radiusKm", String(rest.radiusKm));
     fd.append("services", JSON.stringify(rest.services));
     fd.append("workAddress", rest.workAddress);
