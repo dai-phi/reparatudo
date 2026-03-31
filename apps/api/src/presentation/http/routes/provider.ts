@@ -48,12 +48,29 @@ const adminQueueQuerySchema = z.object({
   status: verificationStatusSchema.optional().default("pending"),
 });
 
-function hasKycAdminAccess(headers: Record<string, unknown>): boolean {
-  const expected = process.env.ADMIN_KYC_KEY;
-  if (!expected || expected.trim() === "") return false;
+function parseAdminKycAuth(headers: Record<string, unknown>): { ok: true } | { ok: false; reason: string } {
+  const expected = process.env.ADMIN_KYC_KEY?.trim();
+  if (!expected) {
+    return { ok: false, reason: "ADMIN_KYC_KEY nao configurada no servidor." };
+  }
+
   const headerValue = headers["x-admin-key"];
-  if (typeof headerValue !== "string") return false;
-  return headerValue.trim() === expected.trim();
+  const received =
+    typeof headerValue === "string"
+      ? headerValue.trim()
+      : Array.isArray(headerValue)
+        ? headerValue.find((value): value is string => typeof value === "string")?.trim() ?? ""
+        : "";
+
+  if (!received) {
+    return { ok: false, reason: 'Header "x-admin-key" nao informado.' };
+  }
+
+  if (received !== expected) {
+    return { ok: false, reason: "Chave admin KYC invalida." };
+  }
+
+  return { ok: true };
 }
 
 function providerRequestStatusLabel(status: string): string {
@@ -541,8 +558,9 @@ export async function registerProviderRoutes(
   });
 
   app.get("/admin/provider-verifications", async (request, reply) => {
-    if (!hasKycAdminAccess(request.headers as Record<string, unknown>)) {
-      return reply.code(401).send({ message: "Nao autorizado" });
+    const auth = parseAdminKycAuth(request.headers as Record<string, unknown>);
+    if (auth.ok === false) {
+      return reply.code(401).send({ message: auth.reason });
     }
     const parsed = adminQueueQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -565,8 +583,9 @@ export async function registerProviderRoutes(
   });
 
   app.post("/admin/provider-verifications/:providerId/decision", async (request, reply) => {
-    if (!hasKycAdminAccess(request.headers as Record<string, unknown>)) {
-      return reply.code(401).send({ message: "Nao autorizado" });
+    const auth = parseAdminKycAuth(request.headers as Record<string, unknown>);
+    if (auth.ok === false) {
+      return reply.code(401).send({ message: auth.reason });
     }
     const paramsSchema = z.object({ providerId: z.string().uuid() });
     const paramsParsed = paramsSchema.safeParse(request.params);

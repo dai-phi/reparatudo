@@ -114,7 +114,7 @@ export default function AdminProviderVerifications() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-2 sm:max-w-md">
-              <Label htmlFor="admin-key">Chave admin KYC</Label>
+              <Label htmlFor="admin-key">Chave admin</Label>
               <Input
                 id="admin-key"
                 type="password"
