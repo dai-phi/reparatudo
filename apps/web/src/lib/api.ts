@@ -2,6 +2,17 @@ import { queryClient } from "./queryClient";
 
 export type Role = "client" | "provider";
 
+export type ProviderPlanId = "standard" | "pro";
+
+export interface ProviderCurrentPlanSummary {
+  id: ProviderPlanId;
+  code: string;
+  name: string;
+  status: "active" | "expired" | "cancelled";
+  expiresAt: string;
+  expiresAtLabel: string;
+}
+
 export interface User {
   id: string;
   role: Role;
@@ -16,6 +27,7 @@ export interface User {
   cpf?: string;
   radiusKm?: number;
   services?: string[];
+  currentPlan?: ProviderCurrentPlanSummary | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -57,48 +69,73 @@ export interface ProviderHistoryItem {
   value: string;
 }
 
-export type ProviderPaymentMethod = "pix" | "cartao_credito" | "cartao_debito";
+export type ProviderPlanPaymentMethod = "pix" | "credit_card" | "debit_card";
 
-export interface ProviderBillingSummary {
-  monthlyFee: number;
-  monthlyFeeLabel: string;
-  freeTrialMonths: number;
-  freeEndsAt: string;
-  inFreePeriod: boolean;
-  freeEndsAtLabel: string;
-  unpaidMonths: { referenceMonth: string; label: string }[];
-  hasOutstanding: boolean;
+export type ProviderPlanPaymentStatus = "pending" | "paid" | "failed" | "cancelled";
+
+export interface ProviderPlanOption {
+  id: ProviderPlanId;
+  code: string;
+  name: string;
+  description: string;
+  price: number;
+  priceLabel: string;
+  billingCycleDays: number;
+  features: string[];
+  isCurrent: boolean;
 }
 
-export type ProviderPaymentStatus = "pending" | "paid" | "cancelled";
-
-export interface ProviderPaymentRow {
+export interface ProviderCurrentSubscription {
   id: string;
+  providerId: string;
+  planId: ProviderPlanId;
+  planCode: string;
+  planName: string;
+  planDescription: string;
+  status: "active" | "expired" | "cancelled";
+  startsAt: string;
+  startsAtLabel: string;
+  expiresAt: string;
+  expiresAtLabel: string;
+  daysRemaining: number;
+  price: number;
+  priceLabel: string;
+  billingCycleDays: number;
+  features: string[];
+}
+
+export interface ProviderPlansResponse {
+  plans: ProviderPlanOption[];
+  currentSubscription: ProviderCurrentSubscription | null;
+}
+
+export interface ProviderPlanPaymentRow {
+  id: string;
+  providerId: string;
+  planId: ProviderPlanId;
+  planCode: string;
+  planName: string;
+  subscriptionId: string;
   amount: number;
   amountLabel: string;
-  paymentMethod: ProviderPaymentMethod;
-  status: ProviderPaymentStatus;
-  referenceMonth: string;
-  referenceMonthLabel: string;
-  paidAt: string;
-  paidAtLabel: string;
+  currency: string;
+  paymentMethod: ProviderPlanPaymentMethod;
+  status: ProviderPlanPaymentStatus;
+  coverageStartsAt: string;
+  coverageStartsAtLabel: string;
+  coverageEndsAt: string;
+  coverageEndsAtLabel: string;
+  paidAt: string | null;
+  paidAtLabel: string | null;
   pixCopyPaste: string | null;
   cardLastFour: string | null;
+  mockTransactionId: string;
   createdAt: string;
 }
 
-export interface ProviderPaymentCreated {
-  id: string;
-  amount: number;
-  amountLabel: string;
-  paymentMethod: ProviderPaymentMethod;
-  status: "paid";
-  referenceMonth: string;
-  referenceMonthLabel: string;
-  paidAt: string;
-  paidAtLabel: string;
-  pixCopyPaste: string | null;
-  cardLastFour: string | null;
+export interface ProviderPlanPurchaseResponse {
+  currentSubscription: ProviderCurrentSubscription | null;
+  payment: ProviderPlanPaymentRow | null;
 }
 
 export interface ClientHistoryItem {
@@ -456,19 +493,20 @@ export function getProviderHistory() {
   return apiFetch<ProviderHistoryItem[]>("/provider/history", { auth: true });
 }
 
-export function getProviderBillingSummary() {
-  return apiFetch<ProviderBillingSummary>("/provider/billing/summary", { auth: true });
+export function getProviderPlans() {
+  return apiFetch<ProviderPlansResponse>("/provider/plans", { auth: true });
 }
 
-export function getProviderBillingPayments() {
-  return apiFetch<ProviderPaymentRow[]>("/provider/billing/payments", { auth: true });
+export function getProviderPlanPayments() {
+  return apiFetch<ProviderPlanPaymentRow[]>("/provider/plans/payments", { auth: true });
 }
 
-export function createProviderBillingPayment(payload: {
-  paymentMethod: ProviderPaymentMethod;
+export function purchaseProviderPlan(payload: {
+  planId: ProviderPlanId;
+  paymentMethod: ProviderPlanPaymentMethod;
   cardLastFour?: string;
 }) {
-  return apiFetch<ProviderPaymentCreated>("/provider/billing/payments", {
+  return apiFetch<ProviderPlanPurchaseResponse>("/provider/plans/subscribe", {
     method: "POST",
     auth: true,
     body: payload,

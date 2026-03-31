@@ -75,7 +75,7 @@ app.get("/health", async () => ({ status: "ok" }));
 await initDb();
 
 await registerAuthRoutes(app, { users, geo, passwordHasher });
-await registerMeRoutes(app, profiles, users);
+await registerMeRoutes(app, profiles, users, providers);
 await registerClientRoutes(app, clients);
 await registerProviderRoutes(app, providers);
 await registerRequestRoutes(app, { users, requests, geo, realtime, email });

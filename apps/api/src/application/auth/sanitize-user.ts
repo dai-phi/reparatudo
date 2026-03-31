@@ -1,9 +1,12 @@
-import type { UserRecord } from "../../domain/entities/records.js";
+type SanitizableRecord = {
+  passwordHash?: unknown;
+  secretHash?: unknown;
+};
 
-export type SanitizedUser = Omit<UserRecord, "passwordHash">;
+export type SanitizedUser<T extends SanitizableRecord> = Omit<T, "passwordHash" | "secretHash">;
 
-export function sanitizeUser(user: UserRecord & { secretHash?: string }): SanitizedUser {
-  const u = user as unknown as Record<string, unknown>;
+export function sanitizeUser<T extends SanitizableRecord>(user: T): SanitizedUser<T> {
+  const u = user as T & Record<string, unknown>;
   const { passwordHash: _p, secretHash: _s, ...rest } = u;
-  return rest as SanitizedUser;
+  return rest as SanitizedUser<T>;
 }

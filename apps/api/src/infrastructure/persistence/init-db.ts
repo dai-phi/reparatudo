@@ -1,4 +1,5 @@
 import { pool } from "./pool.js";
+import { PROVIDER_PLAN_CATALOG } from "../../domain/value-objects/provider-plan.js";
 
 export async function initDb() {
   if (!process.env.DATABASE_URL) {
@@ -94,6 +95,56 @@ export async function initDb() {
 
     CREATE INDEX IF NOT EXISTS idx_provider_payments_provider ON provider_payments(provider_id);
     CREATE INDEX IF NOT EXISTS idx_provider_payments_ref ON provider_payments(provider_id, reference_month);
+
+    CREATE TABLE IF NOT EXISTS provider_subscription_plans (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      price NUMERIC(12, 2) NOT NULL,
+      billing_cycle_days INTEGER NOT NULL DEFAULT 30,
+      features TEXT[] NOT NULL DEFAULT '{}',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS provider_plan_subscriptions (
+      id TEXT PRIMARY KEY,
+      provider_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      plan_id TEXT NOT NULL REFERENCES provider_subscription_plans(id) ON DELETE RESTRICT,
+      status TEXT NOT NULL CHECK (status IN ('active', 'expired', 'cancelled')),
+      starts_at TIMESTAMPTZ NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      cancelled_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS provider_plan_payments (
+      id TEXT PRIMARY KEY,
+      provider_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      plan_id TEXT NOT NULL REFERENCES provider_subscription_plans(id) ON DELETE RESTRICT,
+      subscription_id TEXT NOT NULL REFERENCES provider_plan_subscriptions(id) ON DELETE CASCADE,
+      amount NUMERIC(12, 2) NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'BRL',
+      payment_method TEXT NOT NULL CHECK (payment_method IN ('pix', 'credit_card', 'debit_card')),
+      status TEXT NOT NULL DEFAULT 'paid' CHECK (status IN ('pending', 'paid', 'failed', 'cancelled')),
+      coverage_starts_at TIMESTAMPTZ NOT NULL,
+      coverage_ends_at TIMESTAMPTZ NOT NULL,
+      paid_at TIMESTAMPTZ,
+      mock_transaction_id TEXT NOT NULL,
+      pix_copy_paste TEXT,
+      card_last_four TEXT,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_provider_plan_subscriptions_provider ON provider_plan_subscriptions(provider_id);
+    CREATE INDEX IF NOT EXISTS idx_provider_plan_subscriptions_status ON provider_plan_subscriptions(provider_id, status);
+    CREATE INDEX IF NOT EXISTS idx_provider_plan_payments_provider ON provider_plan_payments(provider_id);
+    CREATE INDEX IF NOT EXISTS idx_provider_plan_payments_subscription ON provider_plan_payments(subscription_id);
   `);
 
   await pool.query(`
@@ -172,4 +223,49 @@ export async function initDb() {
       END IF;
     END $$;
   `);
+
+  const now = new Date().toISOString();
+  for (const plan of PROVIDER_PLAN_CATALOG) {
+    await pool.query(
+      `
+        INSERT INTO provider_subscription_plans (
+          id,
+          code,
+          name,
+          description,
+          price,
+          billing_cycle_days,
+          features,
+          sort_order,
+          is_active,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7::text[], $8, true, $9, $10)
+        ON CONFLICT (id) DO UPDATE
+        SET
+          code = EXCLUDED.code,
+          name = EXCLUDED.name,
+          description = EXCLUDED.description,
+          price = EXCLUDED.price,
+          billing_cycle_days = EXCLUDED.billing_cycle_days,
+          features = EXCLUDED.features,
+          sort_order = EXCLUDED.sort_order,
+          is_active = EXCLUDED.is_active,
+          updated_at = EXCLUDED.updated_at
+      `,
+      [
+        plan.id,
+        plan.code,
+        plan.name,
+        plan.description,
+        plan.price,
+        plan.billingCycleDays,
+        [...plan.features],
+        plan.sortOrder,
+        now,
+        now,
+      ]
+    );
+  }
 }

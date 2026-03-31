@@ -1,28 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, LogOut, User, Wrench } from "lucide-react";
+import { toast } from "sonner";
+import { ProviderAccountMenu } from "@/components/ProviderAccountMenu";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ArrowLeft, Bell, Copy, CreditCard, LogOut, QrCode, User, Wallet, Wrench } from "lucide-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import {
-  ApiError,
-  createProviderBillingPayment,
   deleteMyProfilePhoto,
-  getProviderBillingPayments,
-  getProviderBillingSummary,
+  getApiErrorMessage,
+  getProviderPlanPayments,
+  getProviderPlans,
   logout,
   setStoredUser,
   updateMe,
   uploadMyProfilePhoto,
-  type ProviderPaymentMethod,
-  type ProviderPaymentStatus,
 } from "@/lib/api";
-import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { hasFullName } from "@/lib/person-name";
 import { isValidBrazilPhone } from "@/lib/phone";
@@ -30,37 +26,33 @@ import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
 const ACCEPT_PROFILE_IMAGES = "image/jpeg,image/png,image/webp";
 
-function paymentMethodLabel(f: ProviderPaymentMethod) {
-  switch (f) {
+type ProviderProfileSection = "profile" | "statement";
+
+function paymentMethodLabel(paymentMethod: string) {
+  switch (paymentMethod) {
     case "pix":
       return "PIX";
-    case "cartao_credito":
-      return "Cartão de crédito";
-    case "cartao_debito":
-      return "Cartão de débito";
+    case "credit_card":
+      return "Cartao de credito";
+    case "debit_card":
+      return "Cartao de debito";
     default:
-      return f;
+      return paymentMethod;
   }
 }
 
-function paymentStatusLabel(s: ProviderPaymentStatus) {
-  switch (s) {
-    case "paid":
-      return "Pago";
-    case "pending":
-      return "Pendente";
-    case "cancelled":
-      return "Cancelado";
-    default:
-      return s;
-  }
+function planLabel(planId: string) {
+  return planId === "pro" ? "Plano Pro" : "Plano padrao";
 }
 
 const ProviderPerfil = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const activeSection: ProviderProfileSection = searchParams.get("tab") === "statement" ? "statement" : "profile";
+  const queryClient = useQueryClient();
   useRequireAuth("/login");
   const { data: me } = useAuthUser();
-  const queryClient = useQueryClient();
+
   const [profileForm, setProfileForm] = useState({
     name: "",
     phone: "",
@@ -68,23 +60,8 @@ const ProviderPerfil = () => {
     workCep: "",
     workAddress: "",
   });
-  const profilePhotoInputRef = useRef<HTMLInputElement>(null);
-  const [payMethod, setPayMethod] = useState<ProviderPaymentMethod>("pix");
-  const [cardLast4, setCardLast4] = useState("");
-  const [lastPixPayload, setLastPixPayload] = useState<string | null>(null);
   const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
-
-  const billingSummaryQuery = useQuery({
-    queryKey: ["providerBillingSummary"],
-    queryFn: getProviderBillingSummary,
-    enabled: Boolean(me && me.role === "provider"),
-  });
-
-  const billingPaymentsQuery = useQuery({
-    queryKey: ["providerBillingPayments"],
-    queryFn: getProviderBillingPayments,
-    enabled: Boolean(me && me.role === "provider"),
-  });
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (me && me.role !== "provider") {
@@ -93,16 +70,27 @@ const ProviderPerfil = () => {
   }, [me, navigate]);
 
   useEffect(() => {
-    if (me) {
-      setProfileForm({
-        name: me.name ?? "",
-        phone: me.phone ?? "",
-        radiusKm: me.radiusKm ? String(me.radiusKm) : "10",
-        workCep: me.workCep ?? "",
-        workAddress: me.workAddress ?? "",
-      });
-    }
+    if (!me) return;
+    setProfileForm({
+      name: me.name ?? "",
+      phone: me.phone ?? "",
+      radiusKm: me.radiusKm ? String(me.radiusKm) : "10",
+      workCep: me.workCep ?? "",
+      workAddress: me.workAddress ?? "",
+    });
   }, [me]);
+
+  const plansQuery = useQuery({
+    queryKey: ["providerPlans"],
+    queryFn: getProviderPlans,
+    enabled: Boolean(me && me.role === "provider"),
+  });
+
+  const paymentsQuery = useQuery({
+    queryKey: ["providerPlanPayments"],
+    queryFn: getProviderPlanPayments,
+    enabled: Boolean(me && me.role === "provider"),
+  });
 
   const updateMutation = useMutation({
     mutationFn: updateMe,
@@ -113,8 +101,7 @@ const ProviderPerfil = () => {
       queryClient.invalidateQueries({ queryKey: ["me"] });
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : UI_ERRORS.profile.update;
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, UI_ERRORS.profile.update));
     },
   });
 
@@ -126,8 +113,7 @@ const ProviderPerfil = () => {
       toast.success("Foto de perfil atualizada");
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel enviar a foto";
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, "Nao foi possivel enviar a foto"));
     },
   });
 
@@ -139,28 +125,7 @@ const ProviderPerfil = () => {
       toast.success("Foto de perfil removida");
     },
     onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : "Nao foi possivel remover a foto";
-      toast.error(message);
-    },
-  });
-
-  const payMutation = useMutation({
-    mutationFn: () =>
-      createProviderBillingPayment({
-        paymentMethod: payMethod,
-        cardLastFour:
-          payMethod === "cartao_credito" || payMethod === "cartao_debito" ? cardLast4.replace(/\D/g, "").slice(0, 4) : undefined,
-      }),
-    onSuccess: (data) => {
-      toast.success(UI_MESSAGES.billing.paymentRegistered);
-      setLastPixPayload(data.pixCopyPaste ?? null);
-      queryClient.invalidateQueries({ queryKey: ["providerBillingSummary"] });
-      queryClient.invalidateQueries({ queryKey: ["providerBillingPayments"] });
-      setCardLast4("");
-    },
-    onError: (error: unknown) => {
-      const message = error instanceof ApiError ? error.message : UI_ERRORS.billing.pay;
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, "Nao foi possivel remover a foto"));
     },
   });
 
@@ -170,18 +135,20 @@ const ProviderPerfil = () => {
   };
 
   const handleSaveProfile = () => {
-    const e: Record<string, string> = {};
+    const nextErrors: Record<string, string> = {};
     if (profileForm.name.trim() && !hasFullName(profileForm.name)) {
-      e.name = "Informe nome completo (nome e sobrenome)";
+      nextErrors.name = "Informe nome completo (nome e sobrenome)";
     }
     if (profileForm.phone.trim() && !isValidBrazilPhone(profileForm.phone)) {
-      e.phone = "Telefone inválido: use DDD + número (10 ou 11 dígitos)";
+      nextErrors.phone = "Telefone invalido: use DDD + numero (10 ou 11 digitos)";
     }
-    setProfileErrors(e);
-    if (Object.keys(e).length > 0) {
+
+    setProfileErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
       toast.error("Corrija os campos destacados.");
       return;
     }
+
     updateMutation.mutate({
       name: profileForm.name.trim() || undefined,
       phone: profileForm.phone.trim() || undefined,
@@ -191,18 +158,8 @@ const ProviderPerfil = () => {
     });
   };
 
+  const currentSubscription = plansQuery.data?.currentSubscription ?? null;
   const avatarUrl = me?.photoUrl ?? null;
-
-  const copyPix = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success(UI_MESSAGES.billing.pixCodeCopied);
-    } catch {
-      toast.error(UI_ERRORS.billing.copyPix);
-    }
-  };
-
-  const summary = billingSummaryQuery.data;
 
   return (
     <div className="min-h-screen bg-background">
@@ -215,13 +172,6 @@ const ProviderPerfil = () => {
             <span className="font-display text-lg font-bold">Repara Tudo!</span>
           </Link>
           <div className="flex items-center gap-2 sm:gap-3 ml-auto">
-            <Link
-              to="/provider/dashboard"
-              className="relative p-2 text-primary-foreground/70 hover:text-primary-foreground"
-              title="Pedidos"
-            >
-              <Bell className="w-5 h-5" />
-            </Link>
             <button
               type="button"
               onClick={handleLogout}
@@ -249,23 +199,20 @@ const ProviderPerfil = () => {
           <ArrowLeft className="w-4 h-4 shrink-0" /> Voltar ao painel
         </Link>
 
-        <div className="max-w-3xl mx-auto w-full space-y-6">
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Conta do prestador</h1>
+        <div className="max-w-4xl mx-auto w-full space-y-6">
+          <div className="space-y-3">
+            <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Conta do prestador</h1>
+            <ProviderAccountMenu active={activeSection} />
+          </div>
 
-          <Tabs defaultValue="perfil" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 max-w-md h-auto p-1 sm:inline-flex sm:w-auto">
-              <TabsTrigger value="perfil" className="text-sm sm:text-base px-4 py-2.5">
-                Perfil
-              </TabsTrigger>
-              <TabsTrigger value="extrato" className="text-sm sm:text-base px-4 py-2.5">
-                Extrato
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="perfil" className="mt-6 space-y-4 sm:mt-8">
-              <div className="rounded-xl bg-card shadow-card p-4 sm:p-6 space-y-4 sm:max-w-2xl">
-                <h2 className="font-display text-xl font-semibold text-card-foreground">Meu perfil</h2>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+          {activeSection === "profile" ? (
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="font-display text-xl">Meu perfil</CardTitle>
+                <CardDescription>Atualize seus dados, area de atendimento e foto de perfil.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                   {avatarUrl ? (
                     <img
                       src={avatarUrl}
@@ -273,15 +220,12 @@ const ProviderPerfil = () => {
                       className="w-24 h-24 sm:w-16 sm:h-16 rounded-full object-cover mx-auto sm:mx-0 ring-2 ring-border"
                     />
                   ) : (
-                    <div
-                      className="w-24 h-24 sm:w-16 sm:h-16 rounded-full border-2 border-dashed border-muted-foreground/40 bg-muted/30 flex flex-col items-center justify-center gap-1 mx-auto sm:mx-0 text-muted-foreground"
-                      aria-hidden
-                    >
+                    <div className="w-24 h-24 sm:w-16 sm:h-16 rounded-full border-2 border-dashed border-muted-foreground/40 bg-muted/30 flex items-center justify-center mx-auto sm:mx-0 text-muted-foreground">
                       <User className="w-8 h-8 sm:w-7 sm:h-7 opacity-60" />
-                      <span className="text-[10px] sm:text-[9px] leading-tight text-center px-1">Sem foto</span>
                     </div>
                   )}
-                  <div className="text-center sm:text-left flex-1 space-y-3">
+
+                  <div className="text-center sm:text-left flex-1 space-y-3 min-w-0">
                     <div>
                       <p className="font-bold text-card-foreground">{me?.name ?? "Profissional"}</p>
                       <p className="text-sm text-muted-foreground break-all">{me?.email ?? "email@exemplo.com"}</p>
@@ -292,10 +236,10 @@ const ProviderPerfil = () => {
                         type="file"
                         accept={ACCEPT_PROFILE_IMAGES}
                         className="hidden"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          e.target.value = "";
-                          if (f) photoUploadMutation.mutate(f);
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          event.target.value = "";
+                          if (file) photoUploadMutation.mutate(file);
                         }}
                       />
                       <Button
@@ -307,7 +251,7 @@ const ProviderPerfil = () => {
                       >
                         {photoUploadMutation.isPending ? "Enviando..." : avatarUrl ? "Trocar foto" : "Enviar foto"}
                       </Button>
-                      {avatarUrl ? (
+                      {avatarUrl && (
                         <Button
                           type="button"
                           variant="ghost"
@@ -318,269 +262,167 @@ const ProviderPerfil = () => {
                         >
                           {photoDeleteMutation.isPending ? "Removendo..." : "Remover foto"}
                         </Button>
-                      ) : null}
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground">JPEG, PNG ou WebP. Máximo 5 MB.</p>
+                    <p className="text-xs text-muted-foreground">JPEG, PNG ou WebP. Maximo de 5 MB.</p>
                   </div>
                 </div>
-                <div className="space-y-4">
-                  <div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2 md:col-span-2">
                     <Label>Nome</Label>
                     <Input
                       value={profileForm.name}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
+                      onChange={(event) => setProfileForm((previous) => ({ ...previous, name: event.target.value }))}
                     />
-                    {profileErrors.name && <p className="text-xs text-destructive mt-1">{profileErrors.name}</p>}
+                    {profileErrors.name && <p className="text-xs text-destructive">{profileErrors.name}</p>}
                   </div>
-                  <div>
+
+                  <div className="space-y-2">
                     <Label>Telefone</Label>
                     <Input
                       value={profileForm.phone}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
+                      onChange={(event) => setProfileForm((previous) => ({ ...previous, phone: event.target.value }))}
                     />
-                    {profileErrors.phone && <p className="text-xs text-destructive mt-1">{profileErrors.phone}</p>}
+                    {profileErrors.phone && <p className="text-xs text-destructive">{profileErrors.phone}</p>}
                   </div>
-                  <div>
-                    <Label>Raio de atuação (km)</Label>
+
+                  <div className="space-y-2">
+                    <Label>Raio de atuacao (km)</Label>
                     <Input
                       type="number"
                       min={1}
                       max={50}
                       value={profileForm.radiusKm}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, radiusKm: e.target.value }))}
+                      onChange={(event) => setProfileForm((previous) => ({ ...previous, radiusKm: event.target.value }))}
                     />
                   </div>
-                  <div>
+
+                  <div className="space-y-2">
                     <Label>CEP do local de trabalho</Label>
                     <Input
                       placeholder="00000-000"
                       value={profileForm.workCep}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, workCep: e.target.value }))}
+                      onChange={(event) => setProfileForm((previous) => ({ ...previous, workCep: event.target.value }))}
                     />
                   </div>
-                  <div>
-                    <Label>Logradouro e número</Label>
+
+                  <div className="space-y-2">
+                    <Label>Endereco do local de trabalho</Label>
                     <Input
-                      placeholder="Rua, número, bairro, cidade, UF"
+                      placeholder="Rua, numero, bairro, cidade, UF"
                       value={profileForm.workAddress}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, workAddress: e.target.value }))}
+                      onChange={(event) => setProfileForm((previous) => ({ ...previous, workAddress: event.target.value }))}
                     />
-                    <p className="text-xs text-muted-foreground mt-1">Inclua o número do imóvel.</p>
                   </div>
-                  <Button variant="hero" className="w-full sm:w-auto" onClick={handleSaveProfile} disabled={updateMutation.isPending}>
-                    Salvar alterações
-                  </Button>
                 </div>
-              </div>
-            </TabsContent>
 
-            <TabsContent value="extrato" className="mt-6 space-y-6 sm:mt-8">
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader className="space-y-1">
-                    <CardTitle className="font-display text-lg sm:text-xl">Mensalidade Repara Tudo!</CardTitle>
-                    <CardDescription>
-                      Os dois primeiros meses após o cadastro são gratuitos. Depois, é cobrada uma mensalidade para uso da plataforma.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {billingSummaryQuery.isLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
-                    {billingSummaryQuery.isError && (
-                      <p className="text-sm text-destructive">Não foi possível carregar o resumo de cobrança.</p>
-                    )}
-                    {summary && (
-                      <>
-                        {summary.inFreePeriod ? (
-                          <div
-                            className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm"
-                            role="status"
-                          >
-                            <p className="font-medium text-foreground">Período gratuito ativo</p>
-                            <p className="text-muted-foreground mt-1">
-                              Você não precisa pagar até <strong>{summary.freeEndsAtLabel}</strong>. Após essa data, a mensalidade
-                              será de <strong>{summary.monthlyFeeLabel}</strong>.
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm space-y-2">
-                            <p
-                              className={cn(
-                                "font-medium",
-                                summary.hasOutstanding ? "text-amber-700 dark:text-amber-400" : "text-foreground",
-                              )}
-                            >
-                              {summary.hasOutstanding
-                                ? "Há mensalidade em aberto."
-                                : "Nenhuma mensalidade em aberto no momento."}
-                            </p>
-                            <p className="text-muted-foreground">
-                              Valor da mensalidade: <strong>{summary.monthlyFeeLabel}</strong> por mês.
-                            </p>
-                            {summary.unpaidMonths.length > 0 && (
-                              <ul className="list-disc list-inside text-muted-foreground">
-                                {summary.unpaidMonths.map((m) => (
-                                  <li key={m.referenceMonth}>{m.label}</li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {summary && !summary.inFreePeriod && summary.hasOutstanding && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="font-display text-lg sm:text-xl">Pagar mensalidade</CardTitle>
-                      <CardDescription>Escolha a forma de pagamento. Integração demonstrativa — PIX e cartão são simulados.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                      <div className="space-y-3">
-                        <Label className="text-base">Forma de pagamento</Label>
-                        <RadioGroup
-                          value={payMethod}
-                          onValueChange={(v) => setPayMethod(v as ProviderPaymentMethod)}
-                          className="grid gap-3 sm:grid-cols-3"
-                        >
-                          <label
-                            className={cn(
-                              "flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors",
-                              payMethod === "pix" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50",
-                            )}
-                          >
-                            <RadioGroupItem value="pix" id="pay-pix" />
-                            <QrCode className="h-5 w-5 shrink-0 text-muted-foreground" />
-                            <span className="text-sm font-medium">PIX (QR + código)</span>
-                          </label>
-                          <label
-                            className={cn(
-                              "flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors",
-                              payMethod === "cartao_credito" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50",
-                            )}
-                          >
-                            <RadioGroupItem value="cartao_credito" id="pay-cc" />
-                            <CreditCard className="h-5 w-5 shrink-0 text-muted-foreground" />
-                            <span className="text-sm font-medium">Crédito</span>
-                          </label>
-                          <label
-                            className={cn(
-                              "flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors",
-                              payMethod === "cartao_debito" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50",
-                            )}
-                          >
-                            <RadioGroupItem value="cartao_debito" id="pay-dd" />
-                            <Wallet className="h-5 w-5 shrink-0 text-muted-foreground" />
-                            <span className="text-sm font-medium">Débito</span>
-                          </label>
-                        </RadioGroup>
+                <Button variant="hero" className="w-full sm:w-auto" onClick={handleSaveProfile} disabled={updateMutation.isPending}>
+                  {updateMutation.isPending ? "Salvando..." : "Salvar alteracoes"}
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              <Card className="border-border">
+                <CardHeader>
+                  <CardTitle className="font-display text-xl">Assinatura atual</CardTitle>
+                  <CardDescription>
+                    O extrato mostra o plano contratado, a data de vencimento e o historico de pagamentos mockados.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {plansQuery.isLoading && <p className="text-sm text-muted-foreground">Carregando assinatura...</p>}
+                  {plansQuery.isError && <p className="text-sm text-destructive">Nao foi possivel carregar a assinatura.</p>}
+                  {!plansQuery.isLoading && !plansQuery.isError && currentSubscription && (
+                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 sm:p-5 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-semibold text-foreground">{planLabel(currentSubscription.planId)}</p>
+                        <span className="inline-flex rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
+                          Ativo
+                        </span>
                       </div>
+                      <p className="text-sm text-muted-foreground">
+                        Vence em <strong>{currentSubscription.expiresAtLabel}</strong>.
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Valor do ciclo atual: <strong>{currentSubscription.priceLabel}</strong>.
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Restam <strong>{currentSubscription.daysRemaining}</strong> dia(s) para renovar.
+                      </p>
+                    </div>
+                  )}
+                  {!plansQuery.isLoading && !plansQuery.isError && !currentSubscription && (
+                    <div className="rounded-xl border border-dashed border-border p-4 sm:p-5 space-y-3">
+                      <p className="font-medium text-foreground">Nenhum plano ativo.</p>
+                      <p className="text-sm text-muted-foreground">
+                        Ative um plano para registrar a assinatura do provider e manter o extrato atualizado.
+                      </p>
+                      <Link to="/provider/plans">
+                        <Button variant="hero">Ir para planos</Button>
+                      </Link>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-                      {(payMethod === "cartao_credito" || payMethod === "cartao_debito") && (
-                        <div className="space-y-2 max-w-xs">
-                          <Label htmlFor="card-last4">Últimos 4 dígitos do cartão</Label>
-                          <Input
-                            id="card-last4"
-                            inputMode="numeric"
-                            maxLength={4}
-                            placeholder="0000"
-                            value={cardLast4}
-                            onChange={(e) => setCardLast4(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                          />
-                          <p className="text-xs text-muted-foreground">Ambiente de demonstração: informe apenas os 4 últimos dígitos.</p>
-                        </div>
-                      )}
-
-                      {payMethod === "pix" && (
-                        <p className="text-sm text-muted-foreground">
-                          Após confirmar, você verá o QR Code e o código copia e cola do PIX (simulado).
-                        </p>
-                      )}
-
-                      <Button
-                        variant="hero"
-                        className="w-full sm:w-auto"
-                        disabled={payMutation.isPending || (payMethod !== "pix" && cardLast4.length !== 4)}
-                        onClick={() => payMutation.mutate()}
-                      >
-                        {payMutation.isPending ? "Processando..." : "Confirmar pagamento"}
-                      </Button>
-
-                      {lastPixPayload && (
-                        <div className="rounded-lg border border-border p-4 space-y-4">
-                          <p className="text-sm font-medium flex items-center gap-2">
-                            <QrCode className="h-4 w-4" /> PIX — pagamento registrado
-                          </p>
-                          <div className="flex flex-col sm:flex-row gap-4 items-start">
-                            <img
-                              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(lastPixPayload)}`}
-                              alt="QR Code PIX"
-                              className="rounded-md border bg-white p-2 mx-auto sm:mx-0"
-                              width={200}
-                              height={200}
-                            />
-                            <div className="flex-1 min-w-0 space-y-2 w-full">
-                              <Label className="text-xs text-muted-foreground">Copia e cola</Label>
-                              <p className="text-xs break-all font-mono bg-muted/50 rounded p-2 border">{lastPixPayload}</p>
-                              <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => copyPix(lastPixPayload)}>
-                                <Copy className="h-4 w-4" />
-                                Copiar código
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="font-display text-lg sm:text-xl">Histórico de pagamentos</CardTitle>
-                    <CardDescription>
-                      Registros de mensalidades pagas ao sistema Repara Tudo!
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {billingPaymentsQuery.isLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
-                    {billingPaymentsQuery.isError && (
-                      <p className="text-sm text-destructive">Não foi possível carregar o extrato.</p>
-                    )}
-                    {billingPaymentsQuery.data && billingPaymentsQuery.data.length === 0 && (
-                      <p className="text-sm text-muted-foreground">Nenhum pagamento registrado ainda.</p>
-                    )}
-                    {billingPaymentsQuery.data && billingPaymentsQuery.data.length > 0 && (
-                      <div className="overflow-x-auto -mx-4 sm:mx-0">
-                        <table className="w-full min-w-[520px] text-sm">
-                          <thead>
-                            <tr className="border-b text-left text-muted-foreground">
-                              <th className="pb-2 pr-3 font-medium">Competência</th>
-                              <th className="pb-2 pr-3 font-medium">Valor</th>
-                              <th className="pb-2 pr-3 font-medium">Forma</th>
-                              <th className="pb-2 pr-3 font-medium">Data</th>
-                              <th className="pb-2 font-medium">Status</th>
+              <Card className="border-border">
+                <CardHeader>
+                  <CardTitle className="font-display text-xl">Historico de pagamentos</CardTitle>
+                  <CardDescription>Pagamentos mockados vinculados aos planos do provider.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {paymentsQuery.isLoading && <p className="text-sm text-muted-foreground">Carregando historico...</p>}
+                  {paymentsQuery.isError && <p className="text-sm text-destructive">Nao foi possivel carregar o extrato.</p>}
+                  {paymentsQuery.data && paymentsQuery.data.length === 0 && (
+                    <p className="text-sm text-muted-foreground">Nenhum pagamento registrado ainda.</p>
+                  )}
+                  {paymentsQuery.data && paymentsQuery.data.length > 0 && (
+                    <div className="overflow-x-auto -mx-4 sm:mx-0">
+                      <table className="w-full min-w-[720px] text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-muted-foreground">
+                            <th className="pb-2 pr-3 font-medium">Plano</th>
+                            <th className="pb-2 pr-3 font-medium">Valor</th>
+                            <th className="pb-2 pr-3 font-medium">Forma</th>
+                            <th className="pb-2 pr-3 font-medium">Cobertura</th>
+                            <th className="pb-2 pr-3 font-medium">Data</th>
+                            <th className="pb-2 font-medium">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paymentsQuery.data.map((payment) => (
+                            <tr key={payment.id} className="border-b border-border/60 last:border-0">
+                              <td className="py-3 pr-3">{planLabel(payment.planId)}</td>
+                              <td className="py-3 pr-3 whitespace-nowrap">{payment.amountLabel}</td>
+                              <td className="py-3 pr-3">{paymentMethodLabel(payment.paymentMethod)}</td>
+                              <td className="py-3 pr-3">
+                                {payment.coverageStartsAtLabel} ate {payment.coverageEndsAtLabel}
+                              </td>
+                              <td className="py-3 pr-3 whitespace-nowrap">{payment.paidAtLabel ?? "-"}</td>
+                              <td className="py-3">
+                                <span
+                                  className={cn(
+                                    "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+                                    payment.status === "paid"
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : "bg-muted text-muted-foreground"
+                                  )}
+                                >
+                                  {payment.status === "paid" ? "Pago" : payment.status}
+                                </span>
+                              </td>
                             </tr>
-                          </thead>
-                          <tbody>
-                            {billingPaymentsQuery.data.map((row) => (
-                              <tr key={row.id} className="border-b border-border/60 last:border-0">
-                                <td className="py-3 pr-3 capitalize">{row.referenceMonthLabel}</td>
-                                <td className="py-3 pr-3 whitespace-nowrap">{row.amountLabel}</td>
-                                <td className="py-3 pr-3">{paymentMethodLabel(row.paymentMethod)}</td>
-                                <td className="py-3 pr-3 whitespace-nowrap">{row.paidAtLabel}</td>
-                                <td className="py-3">{paymentStatusLabel(row.status)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-          </Tabs>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </div>
