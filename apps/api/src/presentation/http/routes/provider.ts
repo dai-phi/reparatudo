@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { IAuditLogWriter } from "../../../domain/ports/audit-log-writer.js";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
-import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
+import { formatCurrency, formatDate, formatRelativeTime } from "../../../application/utils/format.js";
 import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
 import type { IImageStorage } from "../../../domain/ports/image-storage.js";
 import type { IProviderRepository } from "../../../domain/ports/provider-repository.js";

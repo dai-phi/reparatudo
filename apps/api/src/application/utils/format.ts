@@ -28,3 +28,13 @@ export function formatRelativeTime(value: string) {
   const diffHours = Math.floor(diffMin / 60);
   return `${diffHours}h atrás`;
 }
+
+export function parseCurrencyInput(value?: string) {
+  if (!value) return 0;
+  const normalized = value
+    .replace(/[^\d,.-]/g, "")
+    .replace(/\./g, "")
+    .replace(/,/g, ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}

@@ -2,7 +2,7 @@ import type { IGeoService } from "../../../domain/ports/geo-service.js";
 import type { IRequestRepository } from "../../../domain/ports/request-repository.js";
 import type { RequestRecord } from "../../../domain/entities/records.js";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
-import { formatCurrency } from "../../utils/format.js";
+import { formatCurrency } from "../../../application/utils/format.js";
 
 export type RequestDetailsDto = {
   id: string;

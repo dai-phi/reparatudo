@@ -9,7 +9,7 @@ import type { IRealtimeBroadcaster } from "../../../domain/ports/realtime-broadc
 import type { IEmailSender } from "../../../domain/ports/email-sender.js";
 import type { IAuditLogWriter } from "../../../domain/ports/audit-log-writer.js";
 import { formatRequestDetails } from "../mappers/request-details-mapper.js";
-import { parseCurrencyInput } from "../../utils/format.js";
+import { parseCurrencyInput } from "../../../application/utils/format.js";
 import { hashIpForAudit, userAgentSnippet } from "../utils/audit-request-context.js";
 import { safeAuditAppend } from "../utils/safe-audit.js";
 import {
