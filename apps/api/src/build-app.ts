@@ -18,6 +18,7 @@ import { PostgresAuditLogRepository } from "./infrastructure/persistence/reposit
 import { PostgresLoginThrottleRepository } from "./infrastructure/persistence/repository/postgres-login-throttle-repository.js";
 import { PostgresPasswordResetTokenStore } from "./infrastructure/persistence/repository/postgres-password-reset-token-store.js";
 import { CloudinaryService } from "./infrastructure/cloudinary/cloudinary-service.js";
+import { createRealtimeConnectionRegistry } from "./infrastructure/realtime/ws-connection-registry-adapter.js";
 import { PostgresGeoService } from "./infrastructure/geo/postgres-geo-service.js";
 import { BcryptPasswordHasher } from "./infrastructure/auth/password-hasher.js";
 import { RealtimeBroadcasterAdapter } from "./infrastructure/realtime/realtime-broadcaster-adapter.js";
@@ -104,7 +105,8 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   };
 
   registerAuthenticate(app);
-  registerWebSocketRoute(app, requests);
+  const wsRegistry = createRealtimeConnectionRegistry();
+  registerWebSocketRoute(app, requests, wsRegistry);
 
   app.get("/", async () => ({
     name: "teu-faz-tudo-api",

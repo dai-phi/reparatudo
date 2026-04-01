@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
-import type { PostgresClientRepository } from "../../../infrastructure/persistence/repository/postgres-client-repository.js";
+import type { IClientRepository } from "../../../domain/ports/client-repository.js";
 import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
 import { NO_DESCRIPTION } from "../../../domain/value-objects/messages.js";
 
@@ -33,7 +33,7 @@ function statusMeta(status: string): { label: string; chatOpen: boolean } {
   }
 }
 
-export async function registerClientRoutes(app: FastifyInstance, clients: PostgresClientRepository) {
+export async function registerClientRoutes(app: FastifyInstance, clients: IClientRepository) {
   app.get("/client/requests", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "client") {
       return reply.code(403).send({ message: "Acesso negado" });
@@ -51,7 +51,7 @@ export async function registerClientRoutes(app: FastifyInstance, clients: Postgr
         status: String(row.status),
         statusLabel: meta.label,
         chatOpen: meta.chatOpen,
-        time: formatRelativeTime(row.updated_at),
+        time: formatRelativeTime(String(row.updated_at)),
       };
     });
 
@@ -70,7 +70,7 @@ export async function registerClientRoutes(app: FastifyInstance, clients: Postgr
       provider: row.provider_name ?? "Prestador",
       service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
       desc: row.description || NO_DESCRIPTION,
-      date: formatDate(row.completed_at || row.updated_at),
+      date: formatDate(String(row.completed_at || row.updated_at)),
       value: formatCurrency(Number(row.agreed_value || 0)),
       rated: Boolean(row.rating),
       rating: row.rating ? Number(row.rating) : 0,

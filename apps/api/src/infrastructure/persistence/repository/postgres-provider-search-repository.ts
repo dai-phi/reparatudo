@@ -1,8 +1,9 @@
 import type { Pool } from "pg";
+import type { IProviderSearchRepository } from "../../../domain/ports/provider-search-repository.js";
 import { pool as defaultPool } from "../pool.js";
 import type { ServiceId } from "../../../domain/value-objects/service-id.js";
 
-export class PostgresProviderSearchRepository {
+export class PostgresProviderSearchRepository implements IProviderSearchRepository {
   constructor(private readonly db: Pool = defaultPool) {}
 
   async findClientCoords(clientId: string) {

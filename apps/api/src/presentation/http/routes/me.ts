@@ -5,9 +5,9 @@ import type { IGeoService } from "../../../domain/ports/geo-service.js";
 import { sanitizeUser } from "../../../application/auth/sanitize-user.js";
 import { normalizePhoneDigits } from "../../../application/utils/phone-digits.js";
 import type { IUserRepository } from "../../../domain/ports/user-repository.js";
-import type { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
-import type { PostgresProfileRepository } from "../../../infrastructure/persistence/repository/postgres-profile-repository.js";
-import type { PostgresProviderRepository } from "../../../infrastructure/persistence/repository/postgres-provider-repository.js";
+import type { IImageStorage } from "../../../domain/ports/image-storage.js";
+import type { IProfileRepository } from "../../../domain/ports/profile-repository.js";
+import type { IProviderRepository } from "../../../domain/ports/provider-repository.js";
 import { formatDate } from "../../utils/format.js";
 import { destroyPublicIdIfAny } from "../utils/cloudinary-helpers.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
@@ -86,7 +86,7 @@ const updateProviderSchema = z.object({
 });
 
 async function loadCurrentPlanSummary(
-  providers: PostgresProviderRepository,
+  providers: IProviderRepository,
   userId: string,
   role: string
 ): Promise<
@@ -123,7 +123,7 @@ async function loadCurrentPlanSummary(
   };
 }
 
-async function mapMePayload(providers: PostgresProviderRepository, user: Record<string, unknown>) {
+async function mapMePayload(providers: IProviderRepository, user: Record<string, unknown>) {
   const currentPlan = await loadCurrentPlanSummary(providers, String(user.id), String(user.role));
 
   return sanitizeUser({
@@ -155,11 +155,11 @@ async function mapMePayload(providers: PostgresProviderRepository, user: Record<
 }
 
 export type MeRoutesDeps = {
-  profiles: PostgresProfileRepository;
+  profiles: IProfileRepository;
   users: IUserRepository;
-  providers: PostgresProviderRepository;
+  providers: IProviderRepository;
   geo: IGeoService;
-  cloudinary: CloudinaryService | null;
+  cloudinary: IImageStorage | null;
   audit?: IAuditLogWriter;
 };
 
@@ -217,7 +217,7 @@ export async function registerMeRoutes(app: FastifyInstance, deps: MeRoutesDeps)
         if (cep.length !== 8) {
           return reply.code(400).send({ message: "CEP invalido" });
         }
-        const prevCep = geo.normalizeCep(user.cep ?? "");
+        const prevCep = geo.normalizeCep(String(user.cep ?? ""));
         const cepUnchanged = prevCep.length === 8 && cep === prevCep;
 
         const addressParts = [
@@ -255,7 +255,7 @@ export async function registerMeRoutes(app: FastifyInstance, deps: MeRoutesDeps)
         data.city !== undefined ||
         data.state !== undefined
       ) {
-        const cepStored = geo.normalizeCep(user.cep ?? "");
+        const cepStored = geo.normalizeCep(String(user.cep ?? ""));
         if (cepStored.length !== 8) {
           return reply.code(400).send({ message: "Informe um CEP valido no perfil antes de alterar o endereco" });
         }
@@ -295,7 +295,7 @@ export async function registerMeRoutes(app: FastifyInstance, deps: MeRoutesDeps)
         values.push(data.radiusKm);
       }
       if (data.workCep !== undefined || data.workAddress !== undefined) {
-        const workCep = data.workCep ? geo.normalizeCep(data.workCep) : (user.work_cep ?? "");
+        const workCep = data.workCep ? geo.normalizeCep(data.workCep) : geo.normalizeCep(String(user.work_cep ?? ""));
         const workParts = [
           data.workAddress ?? user.work_address,
           data.workComplement,
@@ -384,7 +384,10 @@ export async function registerMeRoutes(app: FastifyInstance, deps: MeRoutesDeps)
       return reply.code(500).send({ message: "Servico de imagens nao configurado." });
     }
 
-    await destroyPublicIdIfAny(cloudinary, user.photo_storage_key ?? null);
+    await destroyPublicIdIfAny(
+      cloudinary,
+      user.photo_storage_key != null ? String(user.photo_storage_key) : null
+    );
 
     let uploaded;
     try {
@@ -433,7 +436,10 @@ export async function registerMeRoutes(app: FastifyInstance, deps: MeRoutesDeps)
     }
 
     if (cloudinary) {
-      await destroyPublicIdIfAny(cloudinary, user.photo_storage_key ?? null);
+      await destroyPublicIdIfAny(
+      cloudinary,
+      user.photo_storage_key != null ? String(user.photo_storage_key) : null
+    );
     }
 
     const now = new Date().toISOString();

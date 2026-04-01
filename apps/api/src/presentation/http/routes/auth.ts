@@ -16,7 +16,7 @@ import type { IPasswordResetTokenStore } from "../../../domain/ports/password-re
 import type { IAuditLogWriter } from "../../../domain/ports/audit-log-writer.js";
 import type { LoginThrottleService } from "../../../application/security/login-throttle.js";
 import { createIpRateLimiter } from "../middleware/ip-rate-limit.js";
-import type { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
+import type { IImageStorage } from "../../../domain/ports/image-storage.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
 import { parseProviderRegistrationMultipart } from "../utils/provider-registration-multipart.js";
 import { serializeUnknownError } from "../utils/serialize-error.js";
@@ -199,7 +199,7 @@ export type AuthRouteDeps = {
   passwordResetTokens?: IPasswordResetTokenStore;
   audit?: IAuditLogWriter;
   loginThrottle?: LoginThrottleService;
-  cloudinary: CloudinaryService | null;
+  cloudinary: IImageStorage | null;
   ipRateLimit?: {
     login: ReturnType<typeof createIpRateLimiter>;
     registerClient: ReturnType<typeof createIpRateLimiter>;

@@ -5,9 +5,9 @@ import type { IAuditLogWriter } from "../../../domain/ports/audit-log-writer.js"
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
 import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
-import type { PostgresProviderRepository } from "../../../infrastructure/persistence/repository/postgres-provider-repository.js";
+import type { IImageStorage } from "../../../domain/ports/image-storage.js";
+import type { IProviderRepository } from "../../../domain/ports/provider-repository.js";
 import { NO_DESCRIPTION } from "../../../domain/value-objects/messages.js";
-import type { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
 import { destroyPublicIdIfAny } from "../utils/cloudinary-helpers.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
 import { getHttpStatusFromError, serializeUnknownError } from "../utils/serialize-error.js";
@@ -191,8 +191,8 @@ function clientIpFromRequest(request: import("fastify").FastifyRequest): string 
 }
 
 export type ProviderRoutesDeps = {
-  providers: PostgresProviderRepository;
-  cloudinary: CloudinaryService | null;
+  providers: IProviderRepository;
+  cloudinary: IImageStorage | null;
   audit?: IAuditLogWriter;
 };
 
@@ -218,7 +218,7 @@ export async function registerProviderRoutes(app: FastifyInstance, deps: Provide
         service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
         desc: row.description || NO_DESCRIPTION,
         distance: "2.3 km",
-        time: formatRelativeTime(row.updated_at || row.created_at),
+        time: formatRelativeTime(String(row.updated_at || row.created_at)),
         status,
         statusLabel: providerRequestStatusLabel(status),
         pendingStepLabel: providerPendingStepLabel(status, providerConfirmed, clientConfirmed),
@@ -266,7 +266,7 @@ export async function registerProviderRoutes(app: FastifyInstance, deps: Provide
         client: row.client_name ?? "Cliente",
         service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
         desc: row.description || NO_DESCRIPTION,
-        date: formatDate(row.completed_at || row.updated_at),
+        date: formatDate(String(row.completed_at || row.updated_at)),
         value: formatCurrency(agreedValue),
         ratingId: row.rating_id ?? null,
         rating: row.rating ? Number(row.rating) : 0,
@@ -298,7 +298,7 @@ export async function registerProviderRoutes(app: FastifyInstance, deps: Provide
     }
 
     await providers.updateRatingProviderResponse({
-      ratingId: target.id,
+      ratingId: String(target.id),
       response: parsed.data.response,
       now: new Date().toISOString(),
     });
@@ -469,7 +469,10 @@ export async function registerProviderRoutes(app: FastifyInstance, deps: Provide
       return reply.code(500).send({ message: "Serviço de imagens não configurado." });
     }
 
-    await destroyPublicIdIfAny(cloudinary, row.verification_document_storage_key ?? null);
+    await destroyPublicIdIfAny(
+      cloudinary,
+      row.verification_document_storage_key != null ? String(row.verification_document_storage_key) : null
+    );
 
     let uploaded;
     try {
@@ -539,7 +542,10 @@ export async function registerProviderRoutes(app: FastifyInstance, deps: Provide
       return reply.code(500).send({ message: "Serviço de imagens não configurado." });
     }
 
-    await destroyPublicIdIfAny(cloudinary, row.verification_selfie_storage_key ?? null);
+    await destroyPublicIdIfAny(
+      cloudinary,
+      row.verification_selfie_storage_key != null ? String(row.verification_selfie_storage_key) : null
+    );
 
     let uploaded;
     try {

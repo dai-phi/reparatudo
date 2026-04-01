@@ -1,7 +1,8 @@
 import type { Pool } from "pg";
+import type { IProfileRepository } from "../../../domain/ports/profile-repository.js";
 import { pool as defaultPool } from "../pool.js";
 
-export class PostgresProfileRepository {
+export class PostgresProfileRepository implements IProfileRepository {
   constructor(private readonly db: Pool = defaultPool) {}
 
   async findById(userId: string) {
