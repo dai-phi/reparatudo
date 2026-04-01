@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import {
   ApiError,
   cancelRequest,
+  createClientOpenJob,
   createRating,
   createServiceRequest,
   getClientHistory,
@@ -20,6 +21,7 @@ import {
   getProviders,
   getRequest,
   logout,
+  type ProviderCard,
 } from "@/lib/api";
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
@@ -35,6 +37,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
@@ -118,6 +128,9 @@ const ClientHome = () => {
   const [tempReview, setTempReview] = useState("");
   const [tempTags, setTempTags] = useState<string[]>([]);
   const [cancelPendingOpen, setCancelPendingOpen] = useState(false);
+  const [requestMode, setRequestMode] = useState<"direct" | "open">("direct");
+  const [callModalProvider, setCallModalProvider] = useState<ProviderCard | null>(null);
+  const [callDescription, setCallDescription] = useState("");
 
   const selectedServiceMeta = services.find((service) => service.id === selectedService);
 
@@ -156,18 +169,37 @@ const ClientHome = () => {
   const providersQuery = useQuery({
     queryKey: ["providers", selectedService],
     queryFn: () => getProviders(selectedService || ""),
-    enabled: Boolean(selectedService),
+    enabled: Boolean(selectedService) && requestMode === "direct",
   });
 
   const requestMutation = useMutation({
     mutationFn: createServiceRequest,
     onSuccess: (data) => {
+      setCallModalProvider(null);
+      setCallDescription("");
       setPendingRequestId(data.requestId);
       queryClient.invalidateQueries({ queryKey: ["clientRequests"] });
       toast.success(UI_MESSAGES.request.createdAndWaitingProvider);
     },
     onError: (error: unknown) => {
       const message = error instanceof ApiError ? error.message : UI_ERRORS.request.create;
+      toast.error(message);
+    },
+  });
+
+  const openJobMutation = useMutation({
+    mutationFn: () =>
+      createClientOpenJob({
+        serviceId: selectedService!,
+        description: description.trim(),
+      }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["clientOpenJobs"] });
+      toast.success("Chamado publicado. Voce recebera propostas dos prestadores na regiao.");
+      navigate(`/client/open-jobs/${data.openJobId}`);
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError ? error.message : "Nao foi possivel publicar o chamado.";
       toast.error(message);
     },
   });
@@ -254,15 +286,19 @@ const ClientHome = () => {
     navigate("/", { replace: true });
   };
 
-  const handleRequest = (providerId: string) => {
-    if (!selectedService) {
+  const confirmDirectRequest = () => {
+    if (!selectedService || !callModalProvider) {
       toast.error(UI_MESSAGES.validation.selectService);
+      return;
+    }
+    if (!callDescription.trim()) {
+      toast.error(UI_MESSAGES.validation.descriptionRequired);
       return;
     }
     requestMutation.mutate({
       serviceId: selectedService,
-      description: description.trim() || undefined,
-      providerId,
+      description: callDescription.trim(),
+      providerId: callModalProvider.id,
     });
   };
 
@@ -292,6 +328,12 @@ const ClientHome = () => {
             <button className="p-2 text-muted-foreground hover:text-foreground" onClick={handleLogout}>
               <LogOut className="w-5 h-5" />
             </button>
+            <Link
+              to="/client/open-jobs"
+              className="hidden sm:inline-flex text-sm text-muted-foreground hover:text-foreground px-2"
+            >
+              Chamados abertos
+            </Link>
             <Link
               to="/client/perfil"
               className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center"
@@ -443,36 +485,97 @@ const ClientHome = () => {
               <p className="text-muted-foreground">Selecione o tipo de serviço e chame um prestador</p>
             </div>
 
+            <div className="mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {services.map((service) => {
+                  const selected = selectedService === service.id;
+                  return (
+                    <motion.button
+                      key={service.id}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => setSelectedService(service.id)}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all text-center ${
+                        selected
+                          ? "border-accent bg-accent/5 shadow-elevated"
+                          : "border-border bg-card hover:border-accent/30 shadow-card"
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${service.color} flex items-center justify-center`}>
+                        <service.icon className="w-5 h-5 text-primary-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-card-foreground leading-tight">{service.label}</p>
+                        <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">{service.desc}</p>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {selectedService && requestMode === "open" && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mb-6"
+                >
+                  <Label className="mb-2 block">
+                    Descreva o problema <span className="text-destructive">*</span>
+                  </Label>
+                  <Textarea
+                    placeholder="Ex: A tomada da cozinha parou de funcionar..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="resize-none"
+                    rows={3}
+                    required
+                    aria-required
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {selectedService && (
               <div className="mb-8 space-y-4">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <div>
                     <h2 className="font-display text-lg font-bold text-foreground">
-                      {pendingRequestId ? "Pedido em aberto" : "Prestadores Disponíveis"}
+                      {pendingRequestId
+                        ? "Pedido em aberto"
+                        : requestMode === "open"
+                          ? "Pedido aberto a propostas"
+                          : "Prestadores Disponíveis"}
                     </h2>
                     <p className="text-sm text-muted-foreground">
                       para {selectedServiceMeta?.label ?? "o serviço selecionado"}
                     </p>
                   </div>
                   {!pendingRequestId && (
-                    <div className="flex flex-wrap gap-2">
-                      {services.map((service) => {
-                        const selected = selectedService === service.id;
-                        return (
-                          <button
-                            key={service.id}
-                            type="button"
-                            onClick={() => setSelectedService(service.id)}
-                            className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
-                              selected
-                                ? "bg-accent text-accent-foreground border-accent shadow-sm"
-                                : "bg-background border-border text-muted-foreground hover:border-accent/50"
-                            }`}
-                          >
-                            {service.label}
-                          </button>
-                        );
-                      })}
+                    <div className="flex rounded-lg border border-border p-0.5 bg-muted/50 w-full sm:w-auto shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setRequestMode("direct")}
+                        className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                          requestMode === "direct"
+                            ? "bg-card shadow-sm text-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Prestador específico
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRequestMode("open")}
+                        className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                          requestMode === "open"
+                            ? "bg-card shadow-sm text-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Aberto a propostas
+                      </button>
                     </div>
                   )}
                 </div>
@@ -521,6 +624,40 @@ const ClientHome = () => {
                       </Button>
                     </CardFooter>
                   </Card>
+                ) : requestMode === "open" ? (
+                  <Card className="border-accent/25 bg-card shadow-card">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base font-display">Receba propostas de prestadores</CardTitle>
+                      <p className="text-sm text-muted-foreground font-normal">
+                        Seu pedido fica visível para profissionais no seu raio. Você compara valores e prazos e escolhe uma
+                        proposta para seguir no chat.
+                      </p>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <Button
+                        type="button"
+                        variant="hero"
+                        className="w-full sm:w-auto"
+                        disabled={openJobMutation.isPending || !description.trim()}
+                        onClick={() => {
+                          if (!description.trim()) {
+                            toast.error(UI_MESSAGES.validation.descriptionRequired);
+                            return;
+                          }
+                          openJobMutation.mutate();
+                        }}
+                      >
+                        {openJobMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          "Publicar chamado aberto"
+                        )}
+                      </Button>
+                      <p className="text-xs text-muted-foreground mt-3">
+                        Acompanhe em <Link className="text-accent underline" to="/client/open-jobs">Chamados abertos</Link>.
+                      </p>
+                    </CardContent>
+                  </Card>
                 ) : providersQuery.isLoading ? (
                   <div className="text-center text-muted-foreground py-8">Carregando prestadores...</div>
                 ) : providersQuery.isError ? (
@@ -566,14 +703,13 @@ const ClientHome = () => {
                           <Button
                             variant="hero"
                             size="sm"
-                            onClick={() => handleRequest(provider.id)}
+                            onClick={() => {
+                              setCallModalProvider(provider);
+                              setCallDescription("");
+                            }}
                             disabled={isSubmittingRequest || Boolean(pendingRequestId)}
                           >
-                            {isSubmittingRequest && requestMutation.variables?.providerId === provider.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              "Chamar"
-                            )}
+                            Chamar
                           </Button>
                         </div>
                       );
@@ -583,63 +719,116 @@ const ClientHome = () => {
               </div>
             )}
 
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-display text-lg font-semibold text-foreground">
-                  {selectedService ? "Trocar serviço" : "Escolha um serviço"}
-                </h3>
-                {selectedService && (
-                  <span className="text-xs text-muted-foreground">
-                    Toque em outro serviço para ver novos prestadores.
-                  </span>
+            <Dialog
+              open={Boolean(callModalProvider)}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setCallModalProvider(null);
+                  setCallDescription("");
+                }
+              }}
+            >
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="font-display">Chamar prestador</DialogTitle>
+                  <DialogDescription>
+                    Revise os dados e descreva o problema. O pedido será enviado apenas para este profissional.
+                  </DialogDescription>
+                </DialogHeader>
+                {callModalProvider && (
+                  <div className="space-y-4">
+                    <div className="flex gap-4 rounded-xl border border-border bg-muted/30 p-4">
+                      {callModalProvider.photoUrl ? (
+                        <img
+                          src={callModalProvider.photoUrl}
+                          alt={callModalProvider.name}
+                          className="w-16 h-16 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-accent/10 text-lg font-bold text-accent">
+                          {callModalProvider.name.charAt(0)}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-foreground">{callModalProvider.name}</p>
+                          {callModalProvider.isVerified && (
+                            <Badge variant="default" className="gap-1 px-2 py-0 text-[10px]">
+                              <ShieldCheck className="h-3 w-3" /> Verificado
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Star className="h-4 w-4 shrink-0 fill-warning text-warning" />
+                          {callModalProvider.rating.toFixed(1)} • Tempo médio:{" "}
+                          {callModalProvider.avgResponseMins >= 9999
+                            ? "--"
+                            : `${callModalProvider.avgResponseMins} min`}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Distância: {callModalProvider.distanceKm ?? "--"} km
+                        </p>
+                        {callModalProvider.lastServiceDistanceKm != null && (
+                          <p className="text-xs text-muted-foreground">
+                            Último atendimento a {callModalProvider.lastServiceDistanceKm} km de você
+                          </p>
+                        )}
+                        {selectedServiceMeta && (
+                          <p className="text-xs text-muted-foreground">
+                            Serviço: <span className="text-foreground">{selectedServiceMeta.label}</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="call-problem-desc" className="mb-2 block">
+                        Descreva o problema <span className="text-destructive">*</span>
+                      </Label>
+                      <Textarea
+                        id="call-problem-desc"
+                        placeholder="Ex: A tomada da cozinha parou de funcionar..."
+                        value={callDescription}
+                        onChange={(e) => setCallDescription(e.target.value)}
+                        className="resize-none"
+                        rows={4}
+                        aria-required
+                      />
+                    </div>
+                  </div>
                 )}
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {services.map((service) => {
-                  const selected = selectedService === service.id;
-                  return (
-                    <motion.button
-                      key={service.id}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => setSelectedService(service.id)}
-                      className={`flex flex-col items-center gap-3 p-6 rounded-xl border-2 transition-all text-center ${
-                        selected
-                          ? "border-accent bg-accent/5 shadow-elevated"
-                          : "border-border bg-card hover:border-accent/30 shadow-card"
-                      }`}
-                    >
-                      <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${service.color} flex items-center justify-center`}>
-                        <service.icon className="w-7 h-7 text-primary-foreground" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-card-foreground">{service.label}</p>
-                        <p className="text-xs text-muted-foreground">{service.desc}</p>
-                      </div>
-                    </motion.button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <AnimatePresence>
-              {selectedService && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="mb-6"
-                >
-                  <Label className="mb-2 block">Descreva o problema (opcional)</Label>
-                  <Textarea
-                    placeholder="Ex: A tomada da cozinha parou de funcionar..."
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className="resize-none"
-                    rows={3}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setCallModalProvider(null);
+                      setCallDescription("");
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="hero"
+                    onClick={confirmDirectRequest}
+                    disabled={
+                      requestMutation.isPending ||
+                      !callDescription.trim() ||
+                      !callModalProvider
+                    }
+                  >
+                    {requestMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      "Enviar pedido"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             <AlertDialog open={cancelPendingOpen} onOpenChange={setCancelPendingOpen}>
               <AlertDialogContent>

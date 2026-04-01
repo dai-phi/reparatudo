@@ -12,6 +12,7 @@ import { PostgresClientRepository } from "./infrastructure/persistence/repositor
 import { PostgresProviderRepository } from "./infrastructure/persistence/repository/postgres-provider-repository.js";
 import { PostgresProfileRepository } from "./infrastructure/persistence/repository/postgres-profile-repository.js";
 import { PostgresProviderSearchRepository } from "./infrastructure/persistence/repository/postgres-provider-search-repository.js";
+import { PostgresOpenJobRepository } from "./infrastructure/persistence/repository/postgres-open-job-repository.js";
 import { PostgresGeoService } from "./infrastructure/geo/postgres-geo-service.js";
 import { BcryptPasswordHasher } from "./infrastructure/auth/password-hasher.js";
 import { RealtimeBroadcasterAdapter } from "./infrastructure/realtime/realtime-broadcaster-adapter.js";
@@ -23,6 +24,7 @@ import { registerClientRoutes } from "./presentation/http/routes/client.js";
 import { registerProviderRoutes } from "./presentation/http/routes/provider.js";
 import { registerRequestRoutes } from "./presentation/http/routes/requests.js";
 import { registerProviderSearchRoutes } from "./presentation/http/routes/providers.js";
+import { registerOpenJobRoutes } from "./presentation/http/routes/open-jobs.js";
 import { registerWebSocketRoute } from "./presentation/websocket/register-web-socket.js";
 
 const app = Fastify({ logger: true });
@@ -56,6 +58,7 @@ const clients = new PostgresClientRepository();
 const providers = new PostgresProviderRepository();
 const profiles = new PostgresProfileRepository();
 const providerSearch = new PostgresProviderSearchRepository();
+const openJobs = new PostgresOpenJobRepository();
 const geo = new PostgresGeoService();
 const passwordHasher = new BcryptPasswordHasher();
 const realtime = new RealtimeBroadcasterAdapter();
@@ -80,6 +83,7 @@ await registerClientRoutes(app, clients);
 await registerProviderRoutes(app, providers);
 await registerRequestRoutes(app, { users, requests, geo, realtime, email });
 await registerProviderSearchRoutes(app, providerSearch);
+await registerOpenJobRoutes(app, { users, openJobs, geo, realtime });
 
 const port = Number(process.env.PORT || 3333);
 const host = process.env.HOST || "0.0.0.0";

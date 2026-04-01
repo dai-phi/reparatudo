@@ -42,6 +42,7 @@ export interface RequestRecord {
   cancellationReason: string | null;
   locationLat: number | null;
   locationLng: number | null;
+  openJobId: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;

@@ -48,6 +48,7 @@ export const UI_MESSAGES = {
   validation: {
     selectService: "Selecione um servico",
     selectRating: "Selecione uma nota",
+    descriptionRequired: "Descreva o problema para continuar",
   },
 } as const;
 

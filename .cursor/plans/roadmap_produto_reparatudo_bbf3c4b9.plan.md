@@ -13,7 +13,7 @@ todos:
     status: completed
   - id: core-dual-request-mode
     content: "Evoluir o core para suportar 2 modos: pedido direcionado (existente) e pedido aberto com propostas (novas entidades e telas)."
-    status: pending
+    status: completed
   - id: quality-lgpd-security
     content: Adicionar rate limiting/anti-bruteforce, audit log, e testes de fluxos críticos + base LGPD (termos/retencao).
     status: pending

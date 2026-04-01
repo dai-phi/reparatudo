@@ -43,6 +43,9 @@ export interface IRequestRepository {
     status: string;
     locationLat: number | null;
     locationLng: number | null;
+    openJobId?: string | null;
+    agreedValue?: number | null;
+    acceptedAt?: string | null;
     createdAt: string;
     updatedAt: string;
   }): Promise<void>;

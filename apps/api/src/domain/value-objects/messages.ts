@@ -34,6 +34,14 @@ export const apiMessages = {
     service: {
       notFound: "Serviço não encontrado",
     },
+    openJob: {
+      notFound: "Chamado não encontrado",
+      notOpen: "Este chamado não está mais aberto para propostas",
+      notOwner: "Acesso negado a este chamado",
+      duplicateQuote: "Você já enviou uma proposta para este chamado",
+      invalidQuote: "Proposta inválida ou indisponível",
+      providerOutOfRadius: "Prestador fora do raio de atendimento para este cliente",
+    },
   } as const;
 
   export const NO_DESCRIPTION = "Sem descrição";

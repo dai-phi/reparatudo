@@ -12,7 +12,10 @@ import ProviderPerfil from "./pages/ProviderPerfil";
 import ProviderPlans from "./pages/ProviderPlans";
 import ClientRegister from "./pages/ClientRegister";
 import ClientHome from "./pages/ClientHome";
+import ClientOpenJobsList from "./pages/ClientOpenJobsList";
+import ClientOpenJobDetail from "./pages/ClientOpenJobDetail";
 import ClientPerfil from "./pages/ClientPerfil";
+import ProviderOpenJob from "./pages/ProviderOpenJob";
 import Chat from "./pages/Chat";
 import Login from "./pages/Login";
 import AdminProviderVerifications from "./pages/AdminProviderVerifications";
@@ -32,7 +35,10 @@ const App = () => (
           <Route path="/provider/plans" element={<ProviderPlans />} />
           <Route path="/client/register" element={<ClientRegister />} />
           <Route path="/client/home" element={<ClientHome />} />
+          <Route path="/client/open-jobs" element={<ClientOpenJobsList />} />
+          <Route path="/client/open-jobs/:id" element={<ClientOpenJobDetail />} />
           <Route path="/client/perfil" element={<ClientPerfil />} />
+          <Route path="/provider/open-jobs/:id" element={<ProviderOpenJob />} />
           <Route path="/login" element={<Login />} />
           <Route path="/chat/:id" element={<Chat />} />
           <Route path="/admin/login" element={<AdminLogin />} />
