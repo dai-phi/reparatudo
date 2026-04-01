@@ -1,6 +1,6 @@
-import type { Role } from "../entities/role.js";
-import type { RequestRecord } from "../entities/records.js";
-import type { ServiceId } from "../value-objects/service-id.js";
+import { Role } from "../../entities/role.js";
+import { RequestRecord } from "../../entities/records.js";
+import { ServiceId } from "../../value-objects/service-id.js";
 
 export type MessageRow = {
   id: string;

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { mapClientHistoryRow, mapClientRequestRow } from "../../../application/client/client-request-mappers.js";
 import { submitClientRating } from "../../../application/client/submit-client-rating.js";
-import type { IClientRepository } from "../../../domain/ports/client-repository.js";
+import type { IClientRepository } from "../../../domain/ports/repositories/client-repository.js";
 
 const ratingSchema = z.object({
   requestId: z.string().min(1),

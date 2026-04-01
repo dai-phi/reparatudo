@@ -1,5 +1,5 @@
 import { sanitizeUser } from "../auth/sanitize-user.js";
-import type { IProviderRepository } from "../../domain/ports/provider-repository.js";
+import type { IProviderRepository } from "../../domain/ports/repositories/provider-repository.js";
 import { formatDate } from "../utils/format.js";
 
 export type CurrentPlanSummary = {

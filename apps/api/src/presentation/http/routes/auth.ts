@@ -8,7 +8,7 @@ import { login } from "../../../application/auth/login.js";
 import { sanitizeUser } from "../../../application/auth/sanitize-user.js";
 import { requestPasswordReset } from "../../../application/auth/request-password-reset.js";
 import { completePasswordReset } from "../../../application/auth/complete-password-reset.js";
-import type { IUserRepository } from "../../../domain/ports/user-repository.js";
+import type { IUserRepository } from "../../../domain/ports/repositories/user-repository.js";
 import type { IPasswordHasher } from "../../../domain/ports/password-hasher.js";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";
 import type { IEmailSender } from "../../../domain/ports/email-sender.js";

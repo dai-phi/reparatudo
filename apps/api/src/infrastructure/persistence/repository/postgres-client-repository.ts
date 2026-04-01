@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { ClientRequestForRatingRow, IClientRepository } from "../../../domain/ports/client-repository.js";
+import type { ClientRequestForRatingRow, IClientRepository } from "../../../domain/ports/repositories/client-repository.js";
 import { pool as defaultPool } from "../pool.js";
 
 export class PostgresClientRepository implements IClientRepository {

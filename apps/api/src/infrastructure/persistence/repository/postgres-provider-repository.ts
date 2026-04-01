@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
-import type { IProviderRepository } from "../../../domain/ports/provider-repository.js";
+import type { IProviderRepository } from "../../../domain/ports/repositories/provider-repository.js";
 import { pool as defaultPool } from "../pool.js";
 import { StatusEnum } from "../../../domain/value-objects/status-enum.js";
 import type { ProviderPlanId, ProviderPlanPaymentMethod } from "../../../domain/value-objects/provider-plan.js";

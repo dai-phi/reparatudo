@@ -1,6 +1,5 @@
-import type { Role } from "../entities/role.js";
-import type { UserRecord } from "../entities/records.js";
-import type { ServiceId } from "../value-objects/service-id.js";
+import { UserRecord } from "../../entities/records.js";
+import { ServiceId } from "../../value-objects/service-id.js";
 
 export type RegisterClientInput = {
   id: string;

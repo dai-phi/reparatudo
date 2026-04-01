@@ -9,7 +9,7 @@ import type {
   QuoteRecord,
   QuoteStatus,
   QuoteWithProvider,
-} from "../../../domain/ports/open-job-repository.js";
+} from "../../../domain/ports/repositories/open-job-repository.js";
 import { pool as defaultPool } from "../pool.js";
 
 function mapServiceId(raw: string): ServiceId {

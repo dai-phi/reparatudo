@@ -1,8 +1,8 @@
 import { normalizePhoneDigits } from "../utils/phone-digits.js";
 import type { IGeoService } from "../../domain/ports/geo-service.js";
-import type { IProfileRepository } from "../../domain/ports/profile-repository.js";
-import type { IProviderRepository } from "../../domain/ports/provider-repository.js";
-import type { IUserRepository } from "../../domain/ports/user-repository.js";
+import type { IProfileRepository } from "../../domain/ports/repositories/profile-repository.js";
+import type { IProviderRepository } from "../../domain/ports/repositories/provider-repository.js";
+import type { IUserRepository } from "../../domain/ports/repositories/user-repository.js";
 import { buildMePayload } from "./build-me-payload.js";
 
 export type UpdateClientProfileInput = {

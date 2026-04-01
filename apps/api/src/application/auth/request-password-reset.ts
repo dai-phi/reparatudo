@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { IUserRepository } from "../../domain/ports/user-repository.js";
+import type { IUserRepository } from "../../domain/ports/repositories/user-repository.js";
 import type { IEmailSender } from "../../domain/ports/email-sender.js";
 import type { IPasswordResetTokenStore } from "../../domain/ports/password-reset-token-store.js";
 

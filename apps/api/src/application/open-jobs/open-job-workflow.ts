@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { IUserRepository } from "../../domain/ports/user-repository.js";
-import type { IOpenJobRepository } from "../../domain/ports/open-job-repository.js";
+import type { IUserRepository } from "../../domain/ports/repositories/user-repository.js";
+import type { IOpenJobRepository } from "../../domain/ports/repositories/open-job-repository.js";
 import type { IGeoService } from "../../domain/ports/geo-service.js";
 import type { IRealtimeBroadcaster } from "../../domain/ports/realtime-broadcaster.js";
 import type { ServiceId } from "../../domain/value-objects/service-id.js";

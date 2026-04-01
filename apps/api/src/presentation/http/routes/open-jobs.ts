@@ -3,8 +3,8 @@ import { z } from "zod";
 import { SERVICE_IDS } from "../../../domain/value-objects/service-id.js";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
 import { formatCurrency } from "../../../application/utils/format.js";
-import type { IUserRepository } from "../../../domain/ports/user-repository.js";
-import type { IOpenJobRepository } from "../../../domain/ports/open-job-repository.js";
+import type { IUserRepository } from "../../../domain/ports/repositories/user-repository.js";
+import type { IOpenJobRepository } from "../../../domain/ports/repositories/open-job-repository.js";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";
 import type { IRealtimeBroadcaster } from "../../../domain/ports/realtime-broadcaster.js";
 import {

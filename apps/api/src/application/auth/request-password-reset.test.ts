@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { requestPasswordReset } from "./request-password-reset.js";
-import type { IUserRepository } from "../../domain/ports/user-repository.js";
+import type { IUserRepository } from "../../domain/ports/repositories/user-repository.js";
 import type { IEmailSender } from "../../domain/ports/email-sender.js";
 import type { IPasswordResetTokenStore } from "../../domain/ports/password-reset-token-store.js";
 

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";
 import { SERVICE_IDS } from "../../../domain/value-objects/service-id.js";
-import type { IProviderSearchRepository } from "../../../domain/ports/provider-search-repository.js";
+import type { IProviderSearchRepository } from "../../../domain/ports/repositories/provider-search-repository.js";
 
 const querySchema = z.object({
   serviceId: z.enum(SERVICE_IDS),

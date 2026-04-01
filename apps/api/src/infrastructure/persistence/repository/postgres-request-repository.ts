@@ -9,7 +9,7 @@ import type {
   RequestParticipants,
   ProviderPreview,
   ClientPreview,
-} from "../../../domain/ports/request-repository.js";
+} from "../../../domain/ports/repositories/request-repository.js";
 import { pool as defaultPool } from "../pool.js";
 
 function mapRequestRow(row: Record<string, unknown>): RequestRecord {

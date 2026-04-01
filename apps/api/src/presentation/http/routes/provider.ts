@@ -6,7 +6,7 @@ import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../../../application/utils/format.js";
 import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
 import type { IImageStorage } from "../../../domain/ports/image-storage.js";
-import type { IProviderRepository } from "../../../domain/ports/provider-repository.js";
+import type { IProviderRepository } from "../../../domain/ports/repositories/provider-repository.js";
 import { NO_DESCRIPTION } from "../../../domain/value-objects/messages.js";
 import {
   uploadVerificationDocument,

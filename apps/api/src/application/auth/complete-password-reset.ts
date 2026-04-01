@@ -1,6 +1,6 @@
-import type { IUserRepository } from "../../domain/ports/user-repository.js";
 import type { IPasswordHasher } from "../../domain/ports/password-hasher.js";
 import type { IPasswordResetTokenStore } from "../../domain/ports/password-reset-token-store.js";
+import { IUserRepository } from "../../domain/ports/repositories/user-repository.js";
 import { hashPasswordResetToken } from "./request-password-reset.js";
 
 export type CompletePasswordResetResult =

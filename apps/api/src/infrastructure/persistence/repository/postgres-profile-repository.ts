@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { IProfileRepository } from "../../../domain/ports/profile-repository.js";
+import type { IProfileRepository } from "../../../domain/ports/repositories/profile-repository.js";
 import { pool as defaultPool } from "../pool.js";
 
 export class PostgresProfileRepository implements IProfileRepository {

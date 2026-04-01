@@ -1,4 +1,4 @@
-import type { ServiceId } from "../value-objects/service-id.js";
+import { ServiceId } from "../../value-objects/service-id.js";
 
 export type OpenJobStatus = "open" | "awarded" | "cancelled";
 

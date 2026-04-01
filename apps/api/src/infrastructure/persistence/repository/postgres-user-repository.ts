@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { IUserRepository, RegisterClientInput, RegisterProviderInput, ProviderForRequest } from "../../../domain/ports/user-repository.js";
+import type { IUserRepository, RegisterClientInput, RegisterProviderInput, ProviderForRequest } from "../../../domain/ports/repositories/user-repository.js";
 import type { UserRecord } from "../../../domain/entities/records.js";
 import type { ServiceId } from "../../../domain/value-objects/service-id.js";
 import { isServiceId } from "../../../domain/value-objects/service-id.js";

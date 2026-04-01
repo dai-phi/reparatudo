@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Role } from "../../domain/entities/role.js";
-import type { IRequestRepository } from "../../domain/ports/request-repository.js";
+import type { IRequestRepository } from "../../domain/ports/repositories/request-repository.js";
 import type { IRealtimeConnectionRegistry, WebSocketLike } from "../../domain/ports/realtime-connection-registry.js";
 import { authorizeWebSocketConnection } from "../../application/websocket/authorize-web-socket-connection.js";
 

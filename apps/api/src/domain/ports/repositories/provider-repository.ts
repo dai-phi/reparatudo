@@ -1,4 +1,4 @@
-import type { ProviderPlanId, ProviderPlanPaymentMethod } from "../value-objects/provider-plan.js";
+import { ProviderPlanId, ProviderPlanPaymentMethod } from "../../value-objects/provider-plan.js";
 
 export interface IProviderRepository {
   listActiveRequests(providerId: string): Promise<Record<string, unknown>[]>;

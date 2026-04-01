@@ -1,5 +1,5 @@
 import type { IImageStorage } from "../../domain/ports/image-storage.js";
-import type { IProviderRepository } from "../../domain/ports/provider-repository.js";
+import type { IProviderRepository } from "../../domain/ports/repositories/provider-repository.js";
 import { destroyPublicIdIfAny } from "../storage/destroy-public-id-if-any.js";
 import { serializeUnknownError } from "../utils/serialize-unknown-error.js";
 
