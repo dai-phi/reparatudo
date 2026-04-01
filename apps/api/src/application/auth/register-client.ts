@@ -4,7 +4,7 @@ import type { IPasswordHasher } from "../../domain/ports/password-hasher.js";
 import type { IGeoService } from "../../domain/ports/geo-service.js";
 import type { UserRecord } from "../../domain/entities/records.js";
 import { normalizePhoneDigits } from "../utils/phone-digits.js";
-import { lookupViaCep } from "../utils/viacep-lookup.js";
+import { lookupViaCep } from "../../infrastructure/cep/viacep-lookup.js";
 
 export type RegisterClientInput = {
   name: string;

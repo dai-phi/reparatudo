@@ -6,7 +6,7 @@ import type { UserRecord } from "../../domain/entities/records.js";
 import type { ServiceId } from "../../domain/value-objects/service-id.js";
 import type { AuthFailure, AuthSuccess } from "./register-client.js";
 import { normalizePhoneDigits } from "../utils/phone-digits.js";
-import { lookupViaCep } from "../utils/viacep-lookup.js";
+import { lookupViaCep } from "../../infrastructure/cep/viacep-lookup.js";
 
 export type RegisterProviderFormInput = {
   name: string;

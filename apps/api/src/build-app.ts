@@ -29,7 +29,7 @@ import { registerMeRoutes } from "./presentation/http/routes/me.js";
 import { registerClientRoutes } from "./presentation/http/routes/client.js";
 import { registerProviderRoutes } from "./presentation/http/routes/provider.js";
 import { registerRequestRoutes } from "./presentation/http/routes/requests.js";
-import { registerProviderSearchRoutes } from "./presentation/http/routes/providers.js";
+import { registerProviderSearchRoutes } from "./presentation/http/routes/provider-search.js";
 import { registerOpenJobRoutes } from "./presentation/http/routes/open-jobs.js";
 import { registerLegalRoutes } from "./presentation/http/routes/legal.js";
 import { registerWebSocketRoute } from "./presentation/websocket/register-web-socket.js";
