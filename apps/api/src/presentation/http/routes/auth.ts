@@ -9,6 +9,8 @@ import { sanitizeUser } from "../../../application/auth/sanitize-user.js";
 import type { IUserRepository } from "../../../domain/ports/user-repository.js";
 import type { IPasswordHasher } from "../../../domain/ports/password-hasher.js";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";
+import type { LoginThrottleService } from "../../../application/security/login-throttle.js";
+import { createIpRateLimiter } from "../middleware/ip-rate-limit.js";
 import { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
 import { parseProviderRegistrationMultipart } from "../utils/provider-registration-multipart.js";
@@ -166,7 +168,18 @@ export type AuthRouteDeps = {
   users: IUserRepository;
   geo: IGeoService;
   passwordHasher: IPasswordHasher;
+  loginThrottle?: LoginThrottleService;
+  ipRateLimit?: {
+    login: ReturnType<typeof createIpRateLimiter>;
+    registerClient: ReturnType<typeof createIpRateLimiter>;
+    registerProvider: ReturnType<typeof createIpRateLimiter>;
+  };
 };
+
+function clientIpFromRequest(request: import("fastify").FastifyRequest): string {
+  const raw = request.ip || request.socket.remoteAddress || "";
+  return String(raw).replace(/^::ffff:/, "") || "unknown";
+}
 
 export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps) {
   const authDeps = {
@@ -175,7 +188,17 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
     passwordHasher: deps.passwordHasher,
   };
 
-  app.post("/auth/register/client", async (request, reply) => {
+  const preRegisterClient = deps.ipRateLimit?.registerClient
+    ? { preHandler: [deps.ipRateLimit.registerClient] }
+    : {};
+
+  const preRegisterProvider = deps.ipRateLimit?.registerProvider
+    ? { preHandler: [deps.ipRateLimit.registerProvider] }
+    : {};
+
+  const preLogin = deps.ipRateLimit?.login ? { preHandler: [deps.ipRateLimit.login] } : {};
+
+  app.post("/auth/register/client", preRegisterClient, async (request, reply) => {
     const parsed = handleValidation(clientSchema.safeParse(request.body), reply);
     if (!parsed) return;
 
@@ -202,7 +225,7 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
     return reply.send({ token, user: sanitizeUser(result.user) });
   });
 
-  app.post("/auth/register/provider", async (request, reply) => {
+  app.post("/auth/register/provider", preRegisterProvider, async (request, reply) => {
     if (request.isMultipart()) {
       const { fields, profilePhoto } = await parseProviderRegistrationMultipart(request);
       const raw = providerBodyFromMultipartFields(fields);
@@ -315,9 +338,22 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
     return reply.send({ token, user: sanitizeUser(result.user) });
   });
 
-  app.post("/auth/login", async (request, reply) => {
+  app.post("/auth/login", preLogin, async (request, reply) => {
     const parsed = handleValidation(loginSchema.safeParse(request.body), reply);
     if (!parsed) return;
+
+    const emailLower = parsed.email.toLowerCase();
+    const clientIp = clientIpFromRequest(request);
+
+    if (deps.loginThrottle) {
+      const key = deps.loginThrottle.keyFor(emailLower, clientIp);
+      const lock = await deps.loginThrottle.isLocked(key, new Date());
+      if (lock.locked) {
+        return reply.code(429).send({
+          message: "Muitas tentativas de login. Aguarde alguns minutos e tente novamente.",
+        });
+      }
+    }
 
     const result = await login(
       { users: deps.users, passwordHasher: deps.passwordHasher },
@@ -325,7 +361,14 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
     );
 
     if ("status" in result) {
+      if (deps.loginThrottle) {
+        await deps.loginThrottle.onFailedLogin(emailLower, clientIp, new Date());
+      }
       return reply.code(result.status).send({ message: result.message });
+    }
+
+    if (deps.loginThrottle) {
+      await deps.loginThrottle.onSuccessfulLogin(emailLower, clientIp);
     }
 
     const token = await createToken(request, result.tokenPayload.sub, result.tokenPayload.role);

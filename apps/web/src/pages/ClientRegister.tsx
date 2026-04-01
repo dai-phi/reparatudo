@@ -598,10 +598,15 @@ const ClientRegister = () => {
             </Button>
           </form>
 
-          <p className="text-center text-sm text-muted-foreground mt-6">
-            É profissional?{" "}
-            <Link to="/provider/register" className="text-accent font-medium hover:underline">
-              Cadastre-se aqui
+          <p className="text-center text-sm text-muted-foreground mt-6 space-y-2">
+            <span className="block">
+              É profissional?{" "}
+              <Link to="/provider/register" className="text-accent font-medium hover:underline">
+                Cadastre-se aqui
+              </Link>
+            </span>
+            <Link to="/legal" className="block hover:underline">
+              Termos, privacidade e retenção de dados (LGPD)
             </Link>
           </p>
         </motion.div>

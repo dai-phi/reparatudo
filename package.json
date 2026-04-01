@@ -11,7 +11,7 @@
     "build": "npm run build -w apps/web && npm run build -w apps/api",
     "lint": "npm run lint -w apps/web && npm run lint -w apps/api",
     "preview": "npm run preview -w apps/web",
-    "test": "npm run test -w apps/web"
+    "test": "npm run test -w apps/web && npm run test -w apps/api"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

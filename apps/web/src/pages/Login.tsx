@@ -133,6 +133,11 @@ const Login = () => {
                 Sou profissional
               </Link>
             </p>
+            <p>
+              <Link to="/legal" className="text-muted-foreground hover:underline">
+                Termos, privacidade e retenção de dados (LGPD)
+              </Link>
+            </p>
           </div>
         </motion.div>
       </div>

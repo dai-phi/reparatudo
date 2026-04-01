@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { IAuditLogWriter } from "../../../domain/ports/audit-log-writer.js";
 import { sanitizeUser } from "../../../application/auth/sanitize-user.js";
 import { normalizePhoneDigits } from "../../../application/utils/phone-digits.js";
 import type { IUserRepository } from "../../../domain/ports/user-repository.js";
@@ -12,8 +13,15 @@ import { formatDate } from "../../utils/format.js";
 import { destroyPublicIdIfAny } from "../utils/cloudinary-helpers.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
 import { getHttpStatusFromError, serializeUnknownError } from "../utils/serialize-error.js";
+import { hashIpForAudit, userAgentSnippet } from "../utils/audit-request-context.js";
+import { safeAuditAppend } from "../utils/safe-audit.js";
 
 const geo = new PostgresGeoService();
+
+function clientIpFromRequest(request: import("fastify").FastifyRequest): string {
+  const raw = request.ip || request.socket.remoteAddress || "";
+  return String(raw).replace(/^::ffff:/, "") || "unknown";
+}
 
 const fullNameUpdate = z
   .string()
@@ -149,12 +157,18 @@ async function mapMePayload(providers: PostgresProviderRepository, user: Record<
   });
 }
 
+export type MeRouteExtraDeps = {
+  audit?: IAuditLogWriter;
+};
+
 export async function registerMeRoutes(
   app: FastifyInstance,
   profiles: PostgresProfileRepository = new PostgresProfileRepository(),
   users: IUserRepository = new PostgresUserRepository(),
-  providers: PostgresProviderRepository = new PostgresProviderRepository()
+  providers: PostgresProviderRepository = new PostgresProviderRepository(),
+  extra?: MeRouteExtraDeps
 ) {
+  const auditSecret = process.env.JWT_SECRET || "dev-secret";
   app.get("/me", { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = await profiles.findById(request.user.sub);
 
@@ -325,6 +339,19 @@ export async function registerMeRoutes(
       return reply.code(404).send({ message: "Usuario nao encontrado" });
     }
 
+    const onlyTimestamp = updates.length === 1 && updates[0].startsWith("updated_at");
+    if (!onlyTimestamp) {
+      await safeAuditAppend(extra?.audit, request.log, {
+        actorUserId: request.user.sub,
+        action: "profile_updated",
+        entityType: "user",
+        entityId: request.user.sub,
+        metadata: { role: String(user.role) },
+        ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+        userAgentSnippet: userAgentSnippet(request),
+      });
+    }
+
     return reply.send(await mapMePayload(providers, fresh));
   });
 
@@ -391,6 +418,16 @@ export async function registerMeRoutes(
       return reply.code(404).send({ message: "Usuario nao encontrado" });
     }
 
+    await safeAuditAppend(extra?.audit, request.log, {
+      actorUserId: request.user.sub,
+      action: "profile_photo_updated",
+      entityType: "user",
+      entityId: request.user.sub,
+      metadata: null,
+      ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+      userAgentSnippet: userAgentSnippet(request),
+    });
+
     return reply.send(await mapMePayload(providers, fresh));
   });
 
@@ -418,6 +455,16 @@ export async function registerMeRoutes(
     if (!fresh) {
       return reply.code(404).send({ message: "Usuario nao encontrado" });
     }
+
+    await safeAuditAppend(extra?.audit, request.log, {
+      actorUserId: request.user.sub,
+      action: "profile_photo_removed",
+      entityType: "user",
+      entityId: request.user.sub,
+      metadata: null,
+      ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+      userAgentSnippet: userAgentSnippet(request),
+    });
 
     return reply.send(await mapMePayload(providers, fresh));
   });

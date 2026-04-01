@@ -236,6 +236,29 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_provider_plan_subscriptions_status ON provider_plan_subscriptions(provider_id, status);
     CREATE INDEX IF NOT EXISTS idx_provider_plan_payments_provider ON provider_plan_payments(provider_id);
     CREATE INDEX IF NOT EXISTS idx_provider_plan_payments_subscription ON provider_plan_payments(subscription_id);
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL,
+      actor_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT,
+      metadata JSONB,
+      ip_hash_prefix TEXT,
+      user_agent_snippet TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_user_id);
+
+    CREATE TABLE IF NOT EXISTS login_throttle (
+      id TEXT PRIMARY KEY,
+      fail_count INTEGER NOT NULL DEFAULT 0,
+      window_started_at TIMESTAMPTZ NOT NULL,
+      last_fail_at TIMESTAMPTZ NOT NULL,
+      locked_until TIMESTAMPTZ
+    );
   `);
 
   await pool.query(`

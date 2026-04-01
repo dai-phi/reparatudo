@@ -414,6 +414,20 @@ async function apiFetch<T>(path: string, options?: { method?: string; body?: unk
   return (await response.json()) as T;
 }
 
+export type LegalSection = { heading: string; body: string };
+
+export type LegalDocument = {
+  slug: string;
+  title: string;
+  version: string;
+  updatedAt: string;
+  sections: LegalSection[];
+};
+
+export function fetchLegalDocument(slug: "terms" | "privacy" | "retention") {
+  return apiFetch<LegalDocument>(`/legal/${slug}`);
+}
+
 export function registerClient(payload: {
   name: string;
   email: string;

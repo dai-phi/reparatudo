@@ -16,7 +16,7 @@ todos:
     status: completed
   - id: quality-lgpd-security
     content: Adicionar rate limiting/anti-bruteforce, audit log, e testes de fluxos críticos + base LGPD (termos/retencao).
-    status: pending
+    status: completed
 isProject: false
 ---
 

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { IAuditLogWriter } from "../../../domain/ports/audit-log-writer.js";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
 import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
@@ -10,6 +11,8 @@ import { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary
 import { destroyPublicIdIfAny } from "../utils/cloudinary-helpers.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
 import { getHttpStatusFromError, serializeUnknownError } from "../utils/serialize-error.js";
+import { hashIpForAudit, userAgentSnippet } from "../utils/audit-request-context.js";
+import { safeAuditAppend } from "../utils/safe-audit.js";
 
 const FREE_TRIAL_MONTHS = 2;
 
@@ -182,10 +185,21 @@ function buildMockPixCopyPaste(planId: ProviderPlanId, amount: number, transacti
   return `PIX|MOCK|plan=${planId}|amount=${amountInCents}|tx=${transactionId}`;
 }
 
+function clientIpFromRequest(request: import("fastify").FastifyRequest): string {
+  const raw = request.ip || request.socket.remoteAddress || "";
+  return String(raw).replace(/^::ffff:/, "") || "unknown";
+}
+
+export type ProviderRouteExtraDeps = {
+  audit?: IAuditLogWriter;
+};
+
 export async function registerProviderRoutes(
   app: FastifyInstance,
-  providers: PostgresProviderRepository = new PostgresProviderRepository()
+  providers: PostgresProviderRepository = new PostgresProviderRepository(),
+  extra?: ProviderRouteExtraDeps
 ) {
+  const auditSecret = process.env.JWT_SECRET || "dev-secret";
   app.get("/provider/requests", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "provider") {
       return reply.code(403).send({ message: "Acesso negado" });
@@ -377,6 +391,16 @@ export async function registerProviderRoutes(
         currentAt,
       });
 
+      await safeAuditAppend(extra?.audit, request.log, {
+        actorUserId: request.user.sub,
+        action: "provider_plan_subscribed",
+        entityType: "provider_plan_payment",
+        entityId: result.payment ? String(result.payment.id) : null,
+        metadata: { planId, paymentMethod },
+        ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+        userAgentSnippet: userAgentSnippet(request),
+      });
+
       return reply.code(201).send({
         currentSubscription: buildCurrentSubscriptionPayload(result.subscription),
         payment: result.payment ? buildPlanPaymentPayload(result.payment) : null,
@@ -469,6 +493,16 @@ export async function registerProviderRoutes(
       verificationStatus: parsedStatus === "rejected" ? "unverified" : parsedStatus,
     });
 
+    await safeAuditAppend(extra?.audit, request.log, {
+      actorUserId: request.user.sub,
+      action: "verification_document_uploaded",
+      entityType: "user",
+      entityId: request.user.sub,
+      metadata: null,
+      ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+      userAgentSnippet: userAgentSnippet(request),
+    });
+
     return reply.code(201).send({
       documentUrl: uploaded.secure_url,
       status: parsedStatus === "rejected" ? "unverified" : parsedStatus,
@@ -532,6 +566,16 @@ export async function registerProviderRoutes(
       verificationStatus: parsedStatus === "rejected" ? "unverified" : parsedStatus,
     });
 
+    await safeAuditAppend(extra?.audit, request.log, {
+      actorUserId: request.user.sub,
+      action: "verification_selfie_uploaded",
+      entityType: "user",
+      entityId: request.user.sub,
+      metadata: null,
+      ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+      userAgentSnippet: userAgentSnippet(request),
+    });
+
     return reply.code(201).send({
       selfieUrl: uploaded.secure_url,
       status: parsedStatus === "rejected" ? "unverified" : parsedStatus,
@@ -554,6 +598,15 @@ export async function registerProviderRoutes(
       return reply.code(400).send({ message: "Sua conta já está verificada." });
     }
     await providers.updateVerificationAssets(request.user.sub, { verificationStatus: "pending" });
+    await safeAuditAppend(extra?.audit, request.log, {
+      actorUserId: request.user.sub,
+      action: "verification_submitted",
+      entityType: "user",
+      entityId: request.user.sub,
+      metadata: { status: "pending" },
+      ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+      userAgentSnippet: userAgentSnippet(request),
+    });
     return reply.send({ status: "pending" as const, message: "Verificação enviada para análise." });
   });
 
@@ -610,6 +663,15 @@ export async function registerProviderRoutes(
 
     await providers.updateVerificationAssets(paramsParsed.data.providerId, {
       verificationStatus: bodyParsed.data.status,
+    });
+    await safeAuditAppend(extra?.audit, request.log, {
+      actorUserId: null,
+      action: "verification_admin_decision",
+      entityType: "user",
+      entityId: paramsParsed.data.providerId,
+      metadata: { status: bodyParsed.data.status },
+      ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+      userAgentSnippet: userAgentSnippet(request),
     });
     return reply.send({
       providerId: paramsParsed.data.providerId,
