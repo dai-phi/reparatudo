@@ -8,9 +8,12 @@ import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/st
 import type { IImageStorage } from "../../../domain/ports/image-storage.js";
 import type { IProviderRepository } from "../../../domain/ports/provider-repository.js";
 import { NO_DESCRIPTION } from "../../../domain/value-objects/messages.js";
-import { destroyPublicIdIfAny } from "../utils/cloudinary-helpers.js";
+import {
+  uploadVerificationDocument,
+  uploadVerificationSelfie,
+} from "../../../application/provider/upload-verification-photo.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
-import { getHttpStatusFromError, serializeUnknownError } from "../utils/serialize-error.js";
+import { getHttpStatusFromError } from "../utils/serialize-error.js";
 import { hashIpForAudit, userAgentSnippet } from "../utils/audit-request-context.js";
 import { safeAuditAppend } from "../utils/safe-audit.js";
 
@@ -465,33 +468,19 @@ export async function registerProviderRoutes(app: FastifyInstance, deps: Provide
       return reply.code(400).send({ message: msg });
     }
 
-    if (!cloudinary) {
-      return reply.code(500).send({ message: "Serviço de imagens não configurado." });
-    }
-
-    await destroyPublicIdIfAny(
-      cloudinary,
-      row.verification_document_storage_key != null ? String(row.verification_document_storage_key) : null
-    );
-
-    let uploaded;
-    try {
-      uploaded = await cloudinary.uploadBuffer(buffer, {
-        folder: "teu-faz-tudo",
-        public_id: `verification/document-${request.user.sub}`,
-        overwrite: true,
-        resource_type: "image",
-      });
-    } catch (e) {
-      return reply.code(502).send({ message: serializeUnknownError(e) });
-    }
-
     const parsedStatus = verificationStatusSchema.parse(row.verification_status ?? "unverified");
-    await providers.updateVerificationAssets(request.user.sub, {
-      verificationDocumentUrl: uploaded.secure_url,
-      verificationDocumentStorageKey: uploaded.public_id,
-      verificationStatus: parsedStatus === "rejected" ? "unverified" : parsedStatus,
-    });
+    const uploadResult = await uploadVerificationDocument(
+      { providers, cloudinary },
+      {
+        providerId: request.user.sub,
+        row,
+        buffer,
+        verificationStatus: parsedStatus,
+      }
+    );
+    if (uploadResult.ok === false) {
+      return reply.code(uploadResult.httpStatus).send({ message: uploadResult.message });
+    }
 
     await safeAuditAppend(extra?.audit, request.log, {
       actorUserId: request.user.sub,
@@ -504,8 +493,8 @@ export async function registerProviderRoutes(app: FastifyInstance, deps: Provide
     });
 
     return reply.code(201).send({
-      documentUrl: uploaded.secure_url,
-      status: parsedStatus === "rejected" ? "unverified" : parsedStatus,
+      documentUrl: uploadResult.documentUrl,
+      status: uploadResult.verificationStatus,
     });
   });
 
@@ -538,33 +527,19 @@ export async function registerProviderRoutes(app: FastifyInstance, deps: Provide
       return reply.code(400).send({ message: msg });
     }
 
-    if (!cloudinary) {
-      return reply.code(500).send({ message: "Serviço de imagens não configurado." });
-    }
-
-    await destroyPublicIdIfAny(
-      cloudinary,
-      row.verification_selfie_storage_key != null ? String(row.verification_selfie_storage_key) : null
-    );
-
-    let uploaded;
-    try {
-      uploaded = await cloudinary.uploadBuffer(buffer, {
-        folder: "teu-faz-tudo",
-        public_id: `verification/selfie-${request.user.sub}`,
-        overwrite: true,
-        resource_type: "image",
-      });
-    } catch (e) {
-      return reply.code(502).send({ message: serializeUnknownError(e) });
-    }
-
     const parsedStatus = verificationStatusSchema.parse(row.verification_status ?? "unverified");
-    await providers.updateVerificationAssets(request.user.sub, {
-      verificationSelfieUrl: uploaded.secure_url,
-      verificationSelfieStorageKey: uploaded.public_id,
-      verificationStatus: parsedStatus === "rejected" ? "unverified" : parsedStatus,
-    });
+    const uploadResult = await uploadVerificationSelfie(
+      { providers, cloudinary },
+      {
+        providerId: request.user.sub,
+        row,
+        buffer,
+        verificationStatus: parsedStatus,
+      }
+    );
+    if (uploadResult.ok === false) {
+      return reply.code(uploadResult.httpStatus).send({ message: uploadResult.message });
+    }
 
     await safeAuditAppend(extra?.audit, request.log, {
       actorUserId: request.user.sub,
@@ -577,8 +552,8 @@ export async function registerProviderRoutes(app: FastifyInstance, deps: Provide
     });
 
     return reply.code(201).send({
-      selfieUrl: uploaded.secure_url,
-      status: parsedStatus === "rejected" ? "unverified" : parsedStatus,
+      selfieUrl: uploadResult.selfieUrl,
+      status: uploadResult.verificationStatus,
     });
   });
 
