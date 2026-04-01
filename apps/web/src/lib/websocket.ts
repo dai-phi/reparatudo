@@ -25,7 +25,8 @@ export type WebsocketEvent =
   | { type: "connection.ready"; requestId?: string }
   | { type: "chat.message"; requestId: string; payload: ChatMessage }
   | { type: "request.updated"; requestId: string; payload: RequestDetails }
-  | { type: "provider.request"; requestId: string; payload: RequestSummary };
+  | { type: "provider.request"; requestId: string; payload: RequestSummary }
+  | { type: "open_job.updated"; payload?: { openJobId?: string; action?: string; quoteId?: string; requestId?: string } };
 
 export interface UseWebsocketOptions {
   requestId?: string;

@@ -2,13 +2,16 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { SERVICE_IDS } from "../../../domain/value-objects/service-id.js";
-import type { IUserRepository } from "../../../domain/ports/user-repository.js";
-import type { IRequestRepository } from "../../../domain/ports/request-repository.js";
+import type { IUserRepository } from "../../../domain/ports/repositories/user-repository.js";
+import type { IRequestRepository } from "../../../domain/ports/repositories/request-repository.js";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";
 import type { IRealtimeBroadcaster } from "../../../domain/ports/realtime-broadcaster.js";
 import type { IEmailSender } from "../../../domain/ports/email-sender.js";
+import type { IAuditLogWriter } from "../../../domain/ports/audit-log-writer.js";
 import { formatRequestDetails } from "../mappers/request-details-mapper.js";
-import { parseCurrencyInput } from "../../utils/format.js";
+import { parseCurrencyInput } from "../../../application/utils/format.js";
+import { hashIpForAudit, userAgentSnippet } from "../utils/audit-request-context.js";
+import { safeAuditAppend } from "../utils/safe-audit.js";
 import {
   acceptRequest,
   broadcastRequestUpdate,
@@ -58,11 +61,18 @@ export type RequestRouteDeps = {
   geo: IGeoService;
   realtime: IRealtimeBroadcaster;
   email: IEmailSender;
+  audit?: IAuditLogWriter;
 };
+
+function clientIpFromRequest(request: import("fastify").FastifyRequest): string {
+  const raw = request.ip || request.socket.remoteAddress || "";
+  return String(raw).replace(/^::ffff:/, "") || "unknown";
+}
 
 type RequestParams = { id: string };
 
 export async function registerRequestRoutes(app: FastifyInstance, deps: RequestRouteDeps) {
+  const auditSecret = process.env.JWT_SECRET || "dev-secret";
   const workflowDeps: RequestWorkflowDeps = {
     users: deps.users,
     requests: deps.requests,
@@ -108,6 +118,16 @@ export async function registerRequestRoutes(app: FastifyInstance, deps: RequestR
     if ("status" in result) {
       return reply.code(result.status).send({ message: result.message });
     }
+
+    await safeAuditAppend(deps.audit, request.log, {
+      actorUserId: request.user.sub,
+      action: "request_created",
+      entityType: "request",
+      entityId: result.requestId,
+      metadata: { serviceId: parsed.data.serviceId, providerId: parsed.data.providerId },
+      ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+      userAgentSnippet: userAgentSnippet(request),
+    });
 
     return reply.send({ requestId: result.requestId });
   });

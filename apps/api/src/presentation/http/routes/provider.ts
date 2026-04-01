@@ -1,15 +1,21 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { IAuditLogWriter } from "../../../domain/ports/audit-log-writer.js";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
-import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
+import { formatCurrency, formatDate, formatRelativeTime } from "../../../application/utils/format.js";
 import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
-import { PostgresProviderRepository } from "../../../infrastructure/persistence/repository/postgres-provider-repository.js";
+import type { IImageStorage } from "../../../domain/ports/image-storage.js";
+import type { IProviderRepository } from "../../../domain/ports/repositories/provider-repository.js";
 import { NO_DESCRIPTION } from "../../../domain/value-objects/messages.js";
-import { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
-import { destroyPublicIdIfAny } from "../utils/cloudinary-helpers.js";
+import {
+  uploadVerificationDocument,
+  uploadVerificationSelfie,
+} from "../../../application/provider/upload-verification-photo.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
-import { getHttpStatusFromError, serializeUnknownError } from "../utils/serialize-error.js";
+import { getHttpStatusFromError } from "../utils/serialize-error.js";
+import { hashIpForAudit, userAgentSnippet } from "../utils/audit-request-context.js";
+import { safeAuditAppend } from "../utils/safe-audit.js";
 
 const FREE_TRIAL_MONTHS = 2;
 
@@ -182,10 +188,21 @@ function buildMockPixCopyPaste(planId: ProviderPlanId, amount: number, transacti
   return `PIX|MOCK|plan=${planId}|amount=${amountInCents}|tx=${transactionId}`;
 }
 
-export async function registerProviderRoutes(
-  app: FastifyInstance,
-  providers: PostgresProviderRepository = new PostgresProviderRepository()
-) {
+function clientIpFromRequest(request: import("fastify").FastifyRequest): string {
+  const raw = request.ip || request.socket.remoteAddress || "";
+  return String(raw).replace(/^::ffff:/, "") || "unknown";
+}
+
+export type ProviderRoutesDeps = {
+  providers: IProviderRepository;
+  cloudinary: IImageStorage | null;
+  audit?: IAuditLogWriter;
+};
+
+export async function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoutesDeps) {
+  const { providers, cloudinary } = deps;
+  const extra = { audit: deps.audit };
+  const auditSecret = process.env.JWT_SECRET || "dev-secret";
   app.get("/provider/requests", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "provider") {
       return reply.code(403).send({ message: "Acesso negado" });
@@ -204,7 +221,7 @@ export async function registerProviderRoutes(
         service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
         desc: row.description || NO_DESCRIPTION,
         distance: "2.3 km",
-        time: formatRelativeTime(row.updated_at || row.created_at),
+        time: formatRelativeTime(String(row.updated_at || row.created_at)),
         status,
         statusLabel: providerRequestStatusLabel(status),
         pendingStepLabel: providerPendingStepLabel(status, providerConfirmed, clientConfirmed),
@@ -252,7 +269,7 @@ export async function registerProviderRoutes(
         client: row.client_name ?? "Cliente",
         service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
         desc: row.description || NO_DESCRIPTION,
-        date: formatDate(row.completed_at || row.updated_at),
+        date: formatDate(String(row.completed_at || row.updated_at)),
         value: formatCurrency(agreedValue),
         ratingId: row.rating_id ?? null,
         rating: row.rating ? Number(row.rating) : 0,
@@ -284,7 +301,7 @@ export async function registerProviderRoutes(
     }
 
     await providers.updateRatingProviderResponse({
-      ratingId: target.id,
+      ratingId: String(target.id),
       response: parsed.data.response,
       now: new Date().toISOString(),
     });
@@ -377,6 +394,16 @@ export async function registerProviderRoutes(
         currentAt,
       });
 
+      await safeAuditAppend(extra?.audit, request.log, {
+        actorUserId: request.user.sub,
+        action: "provider_plan_subscribed",
+        entityType: "provider_plan_payment",
+        entityId: result.payment ? String(result.payment.id) : null,
+        metadata: { planId, paymentMethod },
+        ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+        userAgentSnippet: userAgentSnippet(request),
+      });
+
       return reply.code(201).send({
         currentSubscription: buildCurrentSubscriptionPayload(result.subscription),
         payment: result.payment ? buildPlanPaymentPayload(result.payment) : null,
@@ -441,37 +468,33 @@ export async function registerProviderRoutes(
       return reply.code(400).send({ message: msg });
     }
 
-    let cloudinary: CloudinaryService;
-    try {
-      cloudinary = new CloudinaryService();
-    } catch {
-      return reply.code(500).send({ message: "Serviço de imagens não configurado." });
-    }
-
-    await destroyPublicIdIfAny(cloudinary, row.verification_document_storage_key ?? null);
-
-    let uploaded;
-    try {
-      uploaded = await cloudinary.uploadBuffer(buffer, {
-        folder: "teu-faz-tudo",
-        public_id: `verification/document-${request.user.sub}`,
-        overwrite: true,
-        resource_type: "image",
-      });
-    } catch (e) {
-      return reply.code(502).send({ message: serializeUnknownError(e) });
-    }
-
     const parsedStatus = verificationStatusSchema.parse(row.verification_status ?? "unverified");
-    await providers.updateVerificationAssets(request.user.sub, {
-      verificationDocumentUrl: uploaded.secure_url,
-      verificationDocumentStorageKey: uploaded.public_id,
-      verificationStatus: parsedStatus === "rejected" ? "unverified" : parsedStatus,
+    const uploadResult = await uploadVerificationDocument(
+      { providers, cloudinary },
+      {
+        providerId: request.user.sub,
+        row,
+        buffer,
+        verificationStatus: parsedStatus,
+      }
+    );
+    if (uploadResult.ok === false) {
+      return reply.code(uploadResult.httpStatus).send({ message: uploadResult.message });
+    }
+
+    await safeAuditAppend(extra?.audit, request.log, {
+      actorUserId: request.user.sub,
+      action: "verification_document_uploaded",
+      entityType: "user",
+      entityId: request.user.sub,
+      metadata: null,
+      ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+      userAgentSnippet: userAgentSnippet(request),
     });
 
     return reply.code(201).send({
-      documentUrl: uploaded.secure_url,
-      status: parsedStatus === "rejected" ? "unverified" : parsedStatus,
+      documentUrl: uploadResult.documentUrl,
+      status: uploadResult.verificationStatus,
     });
   });
 
@@ -504,37 +527,33 @@ export async function registerProviderRoutes(
       return reply.code(400).send({ message: msg });
     }
 
-    let cloudinary: CloudinaryService;
-    try {
-      cloudinary = new CloudinaryService();
-    } catch {
-      return reply.code(500).send({ message: "Serviço de imagens não configurado." });
-    }
-
-    await destroyPublicIdIfAny(cloudinary, row.verification_selfie_storage_key ?? null);
-
-    let uploaded;
-    try {
-      uploaded = await cloudinary.uploadBuffer(buffer, {
-        folder: "teu-faz-tudo",
-        public_id: `verification/selfie-${request.user.sub}`,
-        overwrite: true,
-        resource_type: "image",
-      });
-    } catch (e) {
-      return reply.code(502).send({ message: serializeUnknownError(e) });
-    }
-
     const parsedStatus = verificationStatusSchema.parse(row.verification_status ?? "unverified");
-    await providers.updateVerificationAssets(request.user.sub, {
-      verificationSelfieUrl: uploaded.secure_url,
-      verificationSelfieStorageKey: uploaded.public_id,
-      verificationStatus: parsedStatus === "rejected" ? "unverified" : parsedStatus,
+    const uploadResult = await uploadVerificationSelfie(
+      { providers, cloudinary },
+      {
+        providerId: request.user.sub,
+        row,
+        buffer,
+        verificationStatus: parsedStatus,
+      }
+    );
+    if (uploadResult.ok === false) {
+      return reply.code(uploadResult.httpStatus).send({ message: uploadResult.message });
+    }
+
+    await safeAuditAppend(extra?.audit, request.log, {
+      actorUserId: request.user.sub,
+      action: "verification_selfie_uploaded",
+      entityType: "user",
+      entityId: request.user.sub,
+      metadata: null,
+      ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+      userAgentSnippet: userAgentSnippet(request),
     });
 
     return reply.code(201).send({
-      selfieUrl: uploaded.secure_url,
-      status: parsedStatus === "rejected" ? "unverified" : parsedStatus,
+      selfieUrl: uploadResult.selfieUrl,
+      status: uploadResult.verificationStatus,
     });
   });
 
@@ -554,6 +573,15 @@ export async function registerProviderRoutes(
       return reply.code(400).send({ message: "Sua conta já está verificada." });
     }
     await providers.updateVerificationAssets(request.user.sub, { verificationStatus: "pending" });
+    await safeAuditAppend(extra?.audit, request.log, {
+      actorUserId: request.user.sub,
+      action: "verification_submitted",
+      entityType: "user",
+      entityId: request.user.sub,
+      metadata: { status: "pending" },
+      ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+      userAgentSnippet: userAgentSnippet(request),
+    });
     return reply.send({ status: "pending" as const, message: "Verificação enviada para análise." });
   });
 
@@ -610,6 +638,15 @@ export async function registerProviderRoutes(
 
     await providers.updateVerificationAssets(paramsParsed.data.providerId, {
       verificationStatus: bodyParsed.data.status,
+    });
+    await safeAuditAppend(extra?.audit, request.log, {
+      actorUserId: null,
+      action: "verification_admin_decision",
+      entityType: "user",
+      entityId: paramsParsed.data.providerId,
+      metadata: { status: bodyParsed.data.status },
+      ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+      userAgentSnippet: userAgentSnippet(request),
     });
     return reply.send({
       providerId: paramsParsed.data.providerId,

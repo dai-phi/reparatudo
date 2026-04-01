@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Role } from "../../domain/entities/role.js";
-import type { IUserRepository } from "../../domain/ports/user-repository.js";
-import type { IRequestRepository } from "../../domain/ports/request-repository.js";
+import type { IUserRepository } from "../../domain/ports/repositories/user-repository.js";
+import type { IRequestRepository } from "../../domain/ports/repositories/request-repository.js";
 import type { IGeoService } from "../../domain/ports/geo-service.js";
 import type { IRealtimeBroadcaster } from "../../domain/ports/realtime-broadcaster.js";
 import type { IEmailSender } from "../../domain/ports/email-sender.js";

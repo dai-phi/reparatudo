@@ -1,5 +1,5 @@
-import type { IUserRepository } from "../../domain/ports/user-repository.js";
 import type { IPasswordHasher } from "../../domain/ports/password-hasher.js";
+import { IUserRepository } from "../../domain/ports/repositories/user-repository.js";
 import type { AuthFailure, AuthSuccess } from "./register-client.js";
 
 export async function login(

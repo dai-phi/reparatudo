@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
+import type { IProviderRepository } from "../../../domain/ports/repositories/provider-repository.js";
 import { pool as defaultPool } from "../pool.js";
 import { StatusEnum } from "../../../domain/value-objects/status-enum.js";
 import type { ProviderPlanId, ProviderPlanPaymentMethod } from "../../../domain/value-objects/provider-plan.js";
@@ -10,7 +11,7 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
-export class PostgresProviderRepository {
+export class PostgresProviderRepository implements IProviderRepository {
   constructor(private readonly db: Pool = defaultPool) {}
 
   async listActiveRequests(providerId: string) {

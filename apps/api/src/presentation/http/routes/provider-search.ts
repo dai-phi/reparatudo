@@ -1,19 +1,20 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { PostgresGeoService } from "../../../infrastructure/geo/postgres-geo-service.js";
+import type { IGeoService } from "../../../domain/ports/geo-service.js";
 import { SERVICE_IDS } from "../../../domain/value-objects/service-id.js";
-import { PostgresProviderSearchRepository } from "../../../infrastructure/persistence/repository/postgres-provider-search-repository.js";
-
-const geo = new PostgresGeoService();
+import type { IProviderSearchRepository } from "../../../domain/ports/repositories/provider-search-repository.js";
 
 const querySchema = z.object({
   serviceId: z.enum(SERVICE_IDS),
 });
 
-export async function registerProviderSearchRoutes(
-  app: FastifyInstance,
-  providers: PostgresProviderSearchRepository = new PostgresProviderSearchRepository()
-) {
+export type ProviderSearchRoutesDeps = {
+  providerSearch: IProviderSearchRepository;
+  geo: IGeoService;
+};
+
+export async function registerProviderSearchRoutes(app: FastifyInstance, deps: ProviderSearchRoutesDeps) {
+  const { providerSearch: providers, geo } = deps;
   app.get("/providers", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "client") {
       return reply.code(403).send({ message: "Acesso negado" });

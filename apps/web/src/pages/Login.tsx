@@ -104,7 +104,12 @@ const Login = () => {
               {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
             </div>
             <div>
-              <Label htmlFor="password">Senha</Label>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <Label htmlFor="password">Senha</Label>
+                <Link to="/forgot-password" className="text-xs text-accent font-medium hover:underline">
+                  Esqueci minha senha
+                </Link>
+              </div>
               <Input
                 id="password"
                 type="password"
@@ -131,6 +136,11 @@ const Login = () => {
             <p>
               <Link to="/provider/register" className="text-accent font-medium hover:underline">
                 Sou profissional
+              </Link>
+            </p>
+            <p>
+              <Link to="/legal" className="text-muted-foreground hover:underline">
+                Termos, privacidade e retenção de dados (LGPD)
               </Link>
             </p>
           </div>

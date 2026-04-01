@@ -3,6 +3,7 @@ import {
   type UploadApiOptions,
   type UploadApiResponse,
 } from "cloudinary";
+import type { IImageStorage, ImageUploadOptions, UploadedImage } from "../../domain/ports/image-storage.js";
 
 export type CloudinaryCredentials = {
   cloudName: string;
@@ -25,7 +26,7 @@ export function readCloudinaryEnv(): CloudinaryCredentials {
 /**
  * Cliente Cloudinary configurado a partir das variáveis de ambiente (.env).
  */
-export class CloudinaryService {
+export class CloudinaryService implements IImageStorage {
   constructor(credentials: CloudinaryCredentials = readCloudinaryEnv()) {
     // cloud_name tem de coincidir com o painel (maiúsculas/minúsculas importam para a API).
     cloudinary.config({
@@ -41,27 +42,30 @@ export class CloudinaryService {
     return cloudinary;
   }
 
-  async uploadBuffer(
-    buffer: Buffer,
-    options?: UploadApiOptions,
-  ): Promise<UploadApiResponse> {
-    return new Promise((resolve, reject) => {
+  async uploadBuffer(buffer: Buffer, options?: ImageUploadOptions): Promise<UploadedImage> {
+    const result = await new Promise<UploadApiResponse>((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        options ?? {},
-        (err, result) => {
+        (options ?? {}) as UploadApiOptions,
+        (err, res) => {
           if (err) {
             reject(err);
             return;
           }
-          if (!result) {
+          if (!res) {
             reject(new Error("Upload Cloudinary sem resposta."));
             return;
           }
-          resolve(result);
+          resolve(res);
         },
       );
       stream.end(buffer);
     });
+    const secure_url = result.secure_url;
+    const public_id = result.public_id;
+    if (!secure_url || !public_id) {
+      throw new Error("Upload Cloudinary sem secure_url ou public_id.");
+    }
+    return { secure_url, public_id };
   }
 
   async uploadPath(
@@ -71,10 +75,7 @@ export class CloudinaryService {
     return cloudinary.uploader.upload(filePath, options);
   }
 
-  async destroy(
-    publicId: string,
-    options?: UploadApiOptions,
-  ): Promise<UploadApiResponse> {
-    return cloudinary.uploader.destroy(publicId, options);
+  async destroy(publicId: string): Promise<void> {
+    await cloudinary.uploader.destroy(publicId);
   }
 }

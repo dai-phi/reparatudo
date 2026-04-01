@@ -172,6 +172,79 @@ export interface ClientRequestItem {
   time: string;
 }
 
+export interface ClientOpenJobListItem {
+  id: string;
+  serviceId: string;
+  serviceLabel: string;
+  description: string;
+  status: "open" | "awarded" | "cancelled";
+  quoteCount: number;
+  createdAt: string;
+}
+
+export interface OpenJobQuoteClientView {
+  id: string;
+  providerId: string;
+  providerName: string;
+  providerPhotoUrl: string | null;
+  providerVerified: boolean;
+  amount: number;
+  amountLabel: string;
+  etaDays: number | null;
+  message: string | null;
+  conditions: string | null;
+  status: string;
+  createdAt: string;
+}
+
+export interface OpenJobQuoteProviderView {
+  id: string;
+  amount: number;
+  amountLabel: string;
+  etaDays: number | null;
+  message: string | null;
+  conditions: string | null;
+  status: string;
+  createdAt: string;
+}
+
+export interface OpenJobDetailClient {
+  id: string;
+  serviceId: string;
+  serviceLabel: string;
+  description: string;
+  status: "open" | "awarded" | "cancelled";
+  locationLat: number | null;
+  locationLng: number | null;
+  createdAt: string;
+  resultRequestId: string | null;
+  quotes: OpenJobQuoteClientView[];
+}
+
+export interface OpenJobDetailProvider {
+  id: string;
+  serviceId: string;
+  serviceLabel: string;
+  description: string;
+  status: "open" | "awarded" | "cancelled";
+  locationLat: number | null;
+  locationLng: number | null;
+  createdAt: string;
+  resultRequestId: string | null;
+  quotes: OpenJobQuoteProviderView[];
+}
+
+export interface ProviderOpenJobDiscoverItem {
+  id: string;
+  serviceId: string;
+  serviceLabel: string;
+  description: string;
+  clientName: string;
+  distanceKm: number;
+  createdAt: string;
+  timeLabel: string;
+}
+
 export interface RequestDetails {
   id: string;
   status: string;
@@ -341,6 +414,20 @@ async function apiFetch<T>(path: string, options?: { method?: string; body?: unk
   return (await response.json()) as T;
 }
 
+export type LegalSection = { heading: string; body: string };
+
+export type LegalDocument = {
+  slug: string;
+  title: string;
+  version: string;
+  updatedAt: string;
+  sections: LegalSection[];
+};
+
+export function fetchLegalDocument(slug: "terms" | "privacy" | "retention") {
+  return apiFetch<LegalDocument>(`/legal/${slug}`);
+}
+
 export function registerClient(payload: {
   name: string;
   email: string;
@@ -430,6 +517,24 @@ export async function registerProvider(payload: {
 
 export function login(payload: { email: string; password: string }) {
   return apiFetch<AuthResponse>("/auth/login", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function requestPasswordReset(payload: { email: string }) {
+  return apiFetch<{ message: string }>("/auth/forgot-password", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function resetPasswordWithToken(payload: {
+  token: string;
+  password: string;
+  passwordConfirm: string;
+}) {
+  return apiFetch<{ message: string }>("/auth/reset-password", {
     method: "POST",
     body: payload,
   });
@@ -673,6 +778,45 @@ export function decideAdminProviderVerification(
 
 export function createServiceRequest(payload: { serviceId: string; description?: string; providerId: string }) {
   return apiFetch<{ requestId: string }>("/requests", { method: "POST", auth: true, body: payload });
+}
+
+export function getClientOpenJobs() {
+  return apiFetch<{ items: ClientOpenJobListItem[] }>("/client/open-jobs", { auth: true });
+}
+
+export function createClientOpenJob(payload: {
+  serviceId: string;
+  description?: string;
+  location?: { lat: number; lng: number };
+}) {
+  return apiFetch<{ openJobId: string }>("/open-jobs", { method: "POST", auth: true, body: payload });
+}
+
+export function getOpenJobForClient(id: string) {
+  return apiFetch<OpenJobDetailClient>(`/open-jobs/${id}`, { auth: true });
+}
+
+export function getOpenJobForProvider(id: string) {
+  return apiFetch<OpenJobDetailProvider>(`/open-jobs/${id}`, { auth: true });
+}
+
+export function cancelClientOpenJob(id: string) {
+  return apiFetch<{ ok: true }>(`/open-jobs/${id}/cancel`, { method: "POST", auth: true });
+}
+
+export function acceptOpenJobQuote(openJobId: string, quoteId: string) {
+  return apiFetch<{ requestId: string }>(`/open-jobs/${openJobId}/quotes/${quoteId}/accept`, { method: "POST", auth: true });
+}
+
+export function getProviderOpenJobsDiscover() {
+  return apiFetch<{ items: ProviderOpenJobDiscoverItem[] }>("/provider/open-jobs", { auth: true });
+}
+
+export function submitOpenJobQuote(
+  openJobId: string,
+  payload: { amount: number; etaDays?: number | null; message?: string | null; conditions?: string | null }
+) {
+  return apiFetch<{ quoteId: string }>(`/open-jobs/${openJobId}/quotes`, { method: "POST", auth: true, body: payload });
 }
 
 export function getProviders(serviceId: string) {

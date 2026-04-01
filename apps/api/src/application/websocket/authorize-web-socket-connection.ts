@@ -1,5 +1,5 @@
 import type { Role } from "../../domain/entities/role.js";
-import type { IRequestRepository } from "../../domain/ports/request-repository.js";
+import type { IRequestRepository } from "../../domain/ports/repositories/request-repository.js";
 import { apiMessages } from "../../domain/value-objects/messages.js";
 
 export type WsAuthInput = {

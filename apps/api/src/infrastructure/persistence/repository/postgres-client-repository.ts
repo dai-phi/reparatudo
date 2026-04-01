@@ -1,7 +1,8 @@
 import type { Pool } from "pg";
+import type { ClientRequestForRatingRow, IClientRepository } from "../../../domain/ports/repositories/client-repository.js";
 import { pool as defaultPool } from "../pool.js";
 
-export class PostgresClientRepository {
+export class PostgresClientRepository implements IClientRepository {
   constructor(private readonly db: Pool = defaultPool) {}
 
   async listRequests(clientId: string) {
@@ -30,9 +31,11 @@ export class PostgresClientRepository {
     return result.rows;
   }
 
-  async findRequestForRating(requestId: string) {
+  async findRequestForRating(requestId: string): Promise<ClientRequestForRatingRow | null> {
     const result = await this.db.query("SELECT id, client_id, provider_id, status FROM requests WHERE id = $1", [requestId]);
-    return result.rows[0] ?? null;
+    const row = result.rows[0];
+    if (!row) return null;
+    return row as ClientRequestForRatingRow;
   }
 
   async hasRating(requestId: string): Promise<boolean> {

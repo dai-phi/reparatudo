@@ -6,13 +6,22 @@ import { registerClient } from "../../../application/auth/register-client.js";
 import { registerProvider } from "../../../application/auth/register-provider.js";
 import { login } from "../../../application/auth/login.js";
 import { sanitizeUser } from "../../../application/auth/sanitize-user.js";
-import type { IUserRepository } from "../../../domain/ports/user-repository.js";
+import { requestPasswordReset } from "../../../application/auth/request-password-reset.js";
+import { completePasswordReset } from "../../../application/auth/complete-password-reset.js";
+import type { IUserRepository } from "../../../domain/ports/repositories/user-repository.js";
 import type { IPasswordHasher } from "../../../domain/ports/password-hasher.js";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";
-import { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
+import type { IEmailSender } from "../../../domain/ports/email-sender.js";
+import type { IPasswordResetTokenStore } from "../../../domain/ports/password-reset-token-store.js";
+import type { IAuditLogWriter } from "../../../domain/ports/audit-log-writer.js";
+import type { LoginThrottleService } from "../../../application/security/login-throttle.js";
+import { createIpRateLimiter } from "../middleware/ip-rate-limit.js";
+import type { IImageStorage } from "../../../domain/ports/image-storage.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
 import { parseProviderRegistrationMultipart } from "../utils/provider-registration-multipart.js";
 import { serializeUnknownError } from "../utils/serialize-error.js";
+import { hashIpForAudit, userAgentSnippet } from "../utils/audit-request-context.js";
+import { safeAuditAppend } from "../utils/safe-audit.js";
 
 const emailSchema = z.string().email();
 
@@ -109,6 +118,26 @@ const loginSchema = z.object({
   password: passwordSchema,
 });
 
+const forgotPasswordSchema = z.object({
+  email: emailSchema,
+});
+
+const resetPasswordSchema = z
+  .object({
+    token: z.string().min(64, "Token invalido"),
+    password: passwordSchema,
+    passwordConfirm: z.string(),
+  })
+  .refine((data) => data.password === data.passwordConfirm, {
+    message: "Senhas nao conferem",
+    path: ["passwordConfirm"],
+  });
+
+const FORGOT_PASSWORD_RESPONSE = {
+  message:
+    "Se existir uma conta com este e-mail, enviaremos instrucoes para redefinir a senha.",
+};
+
 function handleValidation<T>(result: z.SafeParseReturnType<T, T>, reply: FastifyReply) {
   if (!result.success) {
     reply.code(400).send({
@@ -166,7 +195,24 @@ export type AuthRouteDeps = {
   users: IUserRepository;
   geo: IGeoService;
   passwordHasher: IPasswordHasher;
+  emailSender?: IEmailSender;
+  passwordResetTokens?: IPasswordResetTokenStore;
+  audit?: IAuditLogWriter;
+  loginThrottle?: LoginThrottleService;
+  cloudinary: IImageStorage | null;
+  ipRateLimit?: {
+    login: ReturnType<typeof createIpRateLimiter>;
+    registerClient: ReturnType<typeof createIpRateLimiter>;
+    registerProvider: ReturnType<typeof createIpRateLimiter>;
+    forgotPassword: ReturnType<typeof createIpRateLimiter>;
+    resetPassword: ReturnType<typeof createIpRateLimiter>;
+  };
 };
+
+function clientIpFromRequest(request: import("fastify").FastifyRequest): string {
+  const raw = request.ip || request.socket.remoteAddress || "";
+  return String(raw).replace(/^::ffff:/, "") || "unknown";
+}
 
 export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps) {
   const authDeps = {
@@ -175,7 +221,28 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
     passwordHasher: deps.passwordHasher,
   };
 
-  app.post("/auth/register/client", async (request, reply) => {
+  const preRegisterClient = deps.ipRateLimit?.registerClient
+    ? { preHandler: [deps.ipRateLimit.registerClient] }
+    : {};
+
+  const preRegisterProvider = deps.ipRateLimit?.registerProvider
+    ? { preHandler: [deps.ipRateLimit.registerProvider] }
+    : {};
+
+  const preLogin = deps.ipRateLimit?.login ? { preHandler: [deps.ipRateLimit.login] } : {};
+
+  const preForgotPassword = deps.ipRateLimit?.forgotPassword
+    ? { preHandler: [deps.ipRateLimit.forgotPassword] }
+    : {};
+
+  const preResetPassword = deps.ipRateLimit?.resetPassword
+    ? { preHandler: [deps.ipRateLimit.resetPassword] }
+    : {};
+
+  const auditSecret = process.env.JWT_SECRET || "dev-secret";
+  const appPublicUrl = process.env.APP_PUBLIC_URL?.trim() || "http://localhost:5173";
+
+  app.post("/auth/register/client", preRegisterClient, async (request, reply) => {
     const parsed = handleValidation(clientSchema.safeParse(request.body), reply);
     if (!parsed) return;
 
@@ -202,7 +269,7 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
     return reply.send({ token, user: sanitizeUser(result.user) });
   });
 
-  app.post("/auth/register/provider", async (request, reply) => {
+  app.post("/auth/register/provider", preRegisterProvider, async (request, reply) => {
     if (request.isMultipart()) {
       const { fields, profilePhoto } = await parseProviderRegistrationMultipart(request);
       const raw = providerBodyFromMultipartFields(fields);
@@ -231,12 +298,10 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
           return reply.code(400).send({ message: msg });
         }
 
-        let cloudinary: CloudinaryService;
-        try {
-          cloudinary = new CloudinaryService();
-        } catch {
+        if (!deps.cloudinary) {
           return reply.code(500).send({ message: "Serviço de imagens não configurado." });
         }
+        const cloudinary = deps.cloudinary;
 
         const userId = randomUUID();
         try {
@@ -315,9 +380,22 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
     return reply.send({ token, user: sanitizeUser(result.user) });
   });
 
-  app.post("/auth/login", async (request, reply) => {
+  app.post("/auth/login", preLogin, async (request, reply) => {
     const parsed = handleValidation(loginSchema.safeParse(request.body), reply);
     if (!parsed) return;
+
+    const emailLower = parsed.email.toLowerCase();
+    const clientIp = clientIpFromRequest(request);
+
+    if (deps.loginThrottle) {
+      const key = deps.loginThrottle.keyFor(emailLower, clientIp);
+      const lock = await deps.loginThrottle.isLocked(key, new Date());
+      if (lock.locked) {
+        return reply.code(429).send({
+          message: "Muitas tentativas de login. Aguarde alguns minutos e tente novamente.",
+        });
+      }
+    }
 
     const result = await login(
       { users: deps.users, passwordHasher: deps.passwordHasher },
@@ -325,7 +403,14 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
     );
 
     if ("status" in result) {
+      if (deps.loginThrottle) {
+        await deps.loginThrottle.onFailedLogin(emailLower, clientIp, new Date());
+      }
       return reply.code(result.status).send({ message: result.message });
+    }
+
+    if (deps.loginThrottle) {
+      await deps.loginThrottle.onSuccessfulLogin(emailLower, clientIp);
     }
 
     const token = await createToken(request, result.tokenPayload.sub, result.tokenPayload.role);
@@ -334,6 +419,68 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
       token,
       user: sanitizeUser(result.user),
     });
+  });
+
+  app.post("/auth/forgot-password", preForgotPassword, async (request, reply) => {
+    const parsed = handleValidation(forgotPasswordSchema.safeParse(request.body), reply);
+    if (!parsed) return;
+
+    if (!deps.passwordResetTokens || !deps.emailSender) {
+      return reply.code(503).send({ message: "Recuperacao de senha indisponivel no momento." });
+    }
+
+    await requestPasswordReset(
+      {
+        users: deps.users,
+        email: deps.emailSender,
+        tokens: deps.passwordResetTokens,
+        appPublicUrl,
+      },
+      { email: parsed.email }
+    );
+
+    return reply.send(FORGOT_PASSWORD_RESPONSE);
+  });
+
+  app.post("/auth/reset-password", preResetPassword, async (request, reply) => {
+    const parsed = handleValidation(resetPasswordSchema.safeParse(request.body), reply);
+    if (!parsed) return;
+
+    if (!deps.passwordResetTokens) {
+      return reply.code(503).send({ message: "Recuperacao de senha indisponivel no momento." });
+    }
+
+    const result = await completePasswordReset(
+      {
+        users: deps.users,
+        passwordHasher: deps.passwordHasher,
+        tokens: deps.passwordResetTokens,
+      },
+      { token: parsed.token, password: parsed.password }
+    );
+
+    if (result.ok === false) {
+      return reply.code(400).send({ message: result.message });
+    }
+
+    await safeAuditAppend(deps.audit, request.log, {
+      actorUserId: result.userId,
+      action: "password_reset_completed",
+      entityType: "user",
+      entityId: result.userId,
+      metadata: null,
+      ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+      userAgentSnippet: userAgentSnippet(request),
+    });
+
+    if (deps.loginThrottle) {
+      const refreshed = await deps.users.findById(result.userId);
+      if (refreshed) {
+        await deps.loginThrottle.onSuccessfulLogin(refreshed.email.toLowerCase(), clientIpFromRequest(request));
+      }
+    }
+
+    return reply.send({ message: "Senha alterada com sucesso. Voce ja pode entrar." });
   });
 
   app.post("/auth/logout", async (_request, reply) => {

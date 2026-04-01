@@ -26,6 +26,7 @@ export const UI_MESSAGES = {
     loginSuccess: "Login realizado!",
     clientRegisterSuccess: "Cadastro realizado!",
     providerRegisterSuccess: "Cadastro realizado com sucesso!",
+    passwordResetSuccess: "Senha alterada! Faça login com a nova senha.",
   },
   profile: {
     updated: "Perfil atualizado!",
@@ -48,6 +49,7 @@ export const UI_MESSAGES = {
   validation: {
     selectService: "Selecione um servico",
     selectRating: "Selecione uma nota",
+    descriptionRequired: "Descreva o problema para continuar",
   },
 } as const;
 
@@ -69,6 +71,8 @@ export const UI_ERRORS = {
   auth: {
     login: "Nao foi possivel entrar",
     register: "Nao foi possivel concluir o cadastro",
+    forgotPassword: "Nao foi possivel enviar o e-mail de recuperacao",
+    resetPassword: "Nao foi possivel redefinir a senha",
   },
   profile: {
     update: "Nao foi possivel atualizar o perfil",

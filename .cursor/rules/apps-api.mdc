@@ -9,7 +9,7 @@ alwaysApply: false
 ## Stack and where to put new code
 
 - **Fastify 5**, **TypeScript ESM** (`"type": "module"`, `moduleResolution: NodeNext`), **Zod** (HTTP validation), **pg**, **@fastify/jwt** + cookie, **@fastify/websocket**, **bcryptjs**.
-- **HTTP routes** → `presentation/http/routes` + `register*Routes` in `main.ts`.
+- **HTTP routes** → `presentation/http/routes` + `register*Routes` wired in `build-app.ts` (entry `main.ts` only starts the server).
 - **Use cases** → `application/` (e.g. `application/auth/`, `application/requests/`, `application/websocket/`, `application/utils/`).
 - **Contracts / domain** → `domain/` (entities, value objects, **ports** such as `IUserRepository`) — no Fastify or SQL.
 - **Postgres and adapters** → `infrastructure/` (e.g. `persistence/`, `auth/`, `realtime/`, `geo/`).
@@ -18,16 +18,16 @@ alwaysApply: false
 
 | Area | Path | Role |
 | --- | --- | --- |
-| Entry / wiring | `main.ts`, `fastify.d.ts` | Bootstrap, DI, route registration |
+| Entry / wiring | `main.ts`, `build-app.ts`, `fastify.d.ts` | `main.ts` listens; `build-app.ts` is the composition root (DI, `register*Routes`) |
 | Use cases | `application/` (`auth/`, `requests/`, `websocket/`, `utils/`, …) | Orchestration; depends only on ports in `domain` |
 | Domain | `domain/entities/`, `domain/value-objects/`, `domain/ports/` | Rules and contracts; no Fastify/SQL |
 | Adapters | `infrastructure/persistence/` (repositories, `pool.ts`, `init-db.ts`), `infrastructure/auth/`, `infrastructure/realtime/`, `infrastructure/geo/` | Implement ports |
-| HTTP / WS | `presentation/http/routes/`, `presentation/http/mappers/`, `presentation/websocket/`, `presentation/utils/` | Zod, handlers, mappers |
+| HTTP / WS | `presentation/http/routes/`, `presentation/http/mappers/`, `presentation/websocket/` | Zod, handlers, mappers; shared date/currency formatting in `application/utils/format.ts` |
 
 ## Architecture and SOLID (aligned with this repo)
 
 - **Dependency rule**: dependencies point inward; `domain` does not import `application`, `infrastructure`, or `presentation`.
-- **Ports / adapters**: new external capability → interface in `domain/ports/`, implementation in `infrastructure/`, wiring in `main.ts`.
+- **Ports / adapters**: new external capability → interface in `domain/ports/`, implementation in `infrastructure/`, wiring in `build-app.ts`.
 - **Single responsibility**: prefer small use-case modules over god objects; keep handlers thin (parse/validate → application → map response).
 - **Interface segregation**: prefer focused ports (e.g. `IUserRepository`) over one mega-interface.
 - **Open/closed**: extend behavior via new port implementations, not by embedding infra details in the domain.

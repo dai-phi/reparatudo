@@ -135,6 +135,37 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_ratings_provider ON ratings(provider_id);
     CREATE INDEX IF NOT EXISTS idx_incidents_request ON incidents(request_id);
     CREATE INDEX IF NOT EXISTS idx_incidents_reporter ON incidents(reporter_id);
+
+    CREATE TABLE IF NOT EXISTS open_jobs (
+      id TEXT PRIMARY KEY,
+      client_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      service_id TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL CHECK (status IN ('open', 'awarded', 'cancelled')),
+      location_lat DOUBLE PRECISION,
+      location_lng DOUBLE PRECISION,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS quotes (
+      id TEXT PRIMARY KEY,
+      open_job_id TEXT NOT NULL REFERENCES open_jobs(id) ON DELETE CASCADE,
+      provider_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount NUMERIC(12, 2) NOT NULL,
+      eta_days INTEGER,
+      message TEXT,
+      conditions TEXT,
+      status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
+      UNIQUE (open_job_id, provider_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_open_jobs_client ON open_jobs(client_id);
+    CREATE INDEX IF NOT EXISTS idx_open_jobs_status ON open_jobs(status);
+    CREATE INDEX IF NOT EXISTS idx_quotes_open_job ON quotes(open_job_id);
+    CREATE INDEX IF NOT EXISTS idx_quotes_provider ON quotes(provider_id);
     CREATE UNIQUE INDEX IF NOT EXISTS users_cpf_unique ON users (cpf) WHERE cpf IS NOT NULL;
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_provider_cpf_required;
     ALTER TABLE users ADD CONSTRAINT users_provider_cpf_required CHECK (role <> 'provider' OR (cpf IS NOT NULL AND cpf <> ''));
@@ -205,6 +236,39 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_provider_plan_subscriptions_status ON provider_plan_subscriptions(provider_id, status);
     CREATE INDEX IF NOT EXISTS idx_provider_plan_payments_provider ON provider_plan_payments(provider_id);
     CREATE INDEX IF NOT EXISTS idx_provider_plan_payments_subscription ON provider_plan_payments(subscription_id);
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL,
+      actor_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT,
+      metadata JSONB,
+      ip_hash_prefix TEXT,
+      user_agent_snippet TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_user_id);
+
+    CREATE TABLE IF NOT EXISTS login_throttle (
+      id TEXT PRIMARY KEY,
+      fail_count INTEGER NOT NULL DEFAULT 0,
+      window_started_at TIMESTAMPTZ NOT NULL,
+      last_fail_at TIMESTAMPTZ NOT NULL,
+      locked_until TIMESTAMPTZ
+    );
+
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens(user_id);
   `);
 
   await pool.query(`
@@ -237,6 +301,8 @@ export async function initDb() {
     ALTER TABLE ratings ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
     ALTER TABLE ratings ADD COLUMN IF NOT EXISTS provider_response TEXT;
     ALTER TABLE ratings ADD COLUMN IF NOT EXISTS provider_response_at TIMESTAMPTZ;
+    ALTER TABLE requests ADD COLUMN IF NOT EXISTS open_job_id TEXT REFERENCES open_jobs(id) ON DELETE SET NULL;
+    CREATE INDEX IF NOT EXISTS idx_requests_open_job ON requests(open_job_id);
   `);
 
   await pool.query(`

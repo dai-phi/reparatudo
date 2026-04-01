@@ -762,6 +762,11 @@ const ProviderRegister = () => {
               </div>
             </div>
           )}
+          <p className="text-center text-sm text-muted-foreground mt-8">
+            <Link to="/legal" className="hover:underline">
+              Termos, privacidade e retenção de dados (LGPD)
+            </Link>
+          </p>
         </motion.div>
       </div>
     </div>

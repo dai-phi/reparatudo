@@ -7,7 +7,8 @@
     "dev": "tsx watch src/main.ts",
     "build": "node -e \"process.exit(0)\"",
     "typecheck": "tsc -p tsconfig.json",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "node --import tsx --test src/application/security/login-throttle.test.ts src/application/auth/request-password-reset.test.ts src/presentation/http/middleware/ip-rate-limit.test.ts src/presentation/http/routes/legal.routes.test.ts src/build-app.auth.test.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

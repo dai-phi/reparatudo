@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { IUserRepository, RegisterClientInput, RegisterProviderInput, ProviderForRequest } from "../../../domain/ports/user-repository.js";
+import type { IUserRepository, RegisterClientInput, RegisterProviderInput, ProviderForRequest } from "../../../domain/ports/repositories/user-repository.js";
 import type { UserRecord } from "../../../domain/entities/records.js";
 import type { ServiceId } from "../../../domain/value-objects/service-id.js";
 import { isServiceId } from "../../../domain/value-objects/service-id.js";
@@ -159,6 +159,14 @@ export class PostgresUserRepository implements IUserRepository {
     const row = result.rows[0];
     if (!row?.cep_lat || !row?.cep_lng) return null;
     return { lat: Number(row.cep_lat), lng: Number(row.cep_lng) };
+  }
+
+  async updatePasswordHash(userId: string, passwordHash: string, updatedAt: string): Promise<void> {
+    await this.db.query(`UPDATE users SET password_hash = $1, updated_at = $2 WHERE id = $3`, [
+      passwordHash,
+      updatedAt,
+      userId,
+    ]);
   }
 
   async findProviderForService(providerId: string, serviceId: ServiceId): Promise<ProviderForRequest | null> {

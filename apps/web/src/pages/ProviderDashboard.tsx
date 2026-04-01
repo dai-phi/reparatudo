@@ -20,7 +20,21 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ApiError, RequestSummary, acceptRequest, cancelRequest, completeRequest, confirmRequest, getProviderHistory, getProviderRequests, getProviderStats, logout, rejectRequest, respondToRating } from "@/lib/api";
+import {
+  ApiError,
+  RequestSummary,
+  acceptRequest,
+  cancelRequest,
+  completeRequest,
+  confirmRequest,
+  getProviderHistory,
+  getProviderOpenJobsDiscover,
+  getProviderRequests,
+  getProviderStats,
+  logout,
+  rejectRequest,
+  respondToRating,
+} from "@/lib/api";
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
@@ -71,6 +85,12 @@ const ProviderDashboard = () => {
   const historyQuery = useQuery({
     queryKey: ["providerHistory"],
     queryFn: getProviderHistory,
+    enabled: Boolean(me && me.role === "provider"),
+  });
+
+  const openJobsDiscoverQuery = useQuery({
+    queryKey: ["providerOpenJobsDiscover"],
+    queryFn: async () => (await getProviderOpenJobsDiscover()).items,
     enabled: Boolean(me && me.role === "provider"),
   });
 
@@ -297,6 +317,40 @@ const ProviderDashboard = () => {
             </motion.div>
           ))}
         </div>
+
+        {activeSection === "nearby" && (openJobsDiscoverQuery.data?.length ?? 0) > 0 && (
+          <div className="mb-8 rounded-xl border border-border bg-card shadow-card p-5">
+            <h2 className="font-display text-lg font-bold text-foreground mb-1">Chamados abertos na região</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Clientes publicaram pedidos sem escolher um prestador. Envie uma proposta com valor e prazo.
+            </p>
+            <ul className="space-y-2">
+              {openJobsDiscoverQuery.data!.map((job) => (
+                <li key={job.id}>
+                  <Link
+                    to={`/provider/open-jobs/${job.id}`}
+                    className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border hover:border-accent/40 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-card-foreground truncate">{job.serviceLabel}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-1">{job.description}</p>
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-3">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          {job.distanceKm} km
+                        </span>
+                        <span>{job.timeLabel}</span>
+                      </p>
+                    </div>
+                    <Button type="button" variant="secondary" size="sm" className="shrink-0">
+                      Ver
+                    </Button>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
