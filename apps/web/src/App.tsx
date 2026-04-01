@@ -18,6 +18,8 @@ import ClientPerfil from "./pages/ClientPerfil";
 import ProviderOpenJob from "./pages/ProviderOpenJob";
 import Chat from "./pages/Chat";
 import Login from "./pages/Login";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import AdminProviderVerifications from "./pages/AdminProviderVerifications";
 import AdminLogin from "./pages/AdminLogin";
 import Legal from "./pages/Legal";
@@ -41,6 +43,8 @@ const App = () => (
           <Route path="/client/perfil" element={<ClientPerfil />} />
           <Route path="/provider/open-jobs/:id" element={<ProviderOpenJob />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/legal" element={<Legal />} />
           <Route path="/chat/:id" element={<Chat />} />
           <Route path="/admin/login" element={<AdminLogin />} />

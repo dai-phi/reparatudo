@@ -16,6 +16,7 @@ import { PostgresProviderSearchRepository } from "./infrastructure/persistence/r
 import { PostgresOpenJobRepository } from "./infrastructure/persistence/repository/postgres-open-job-repository.js";
 import { PostgresAuditLogRepository } from "./infrastructure/persistence/repository/postgres-audit-log-repository.js";
 import { PostgresLoginThrottleRepository } from "./infrastructure/persistence/repository/postgres-login-throttle-repository.js";
+import { PostgresPasswordResetTokenStore } from "./infrastructure/persistence/repository/postgres-password-reset-token-store.js";
 import { PostgresGeoService } from "./infrastructure/geo/postgres-geo-service.js";
 import { BcryptPasswordHasher } from "./infrastructure/auth/password-hasher.js";
 import { RealtimeBroadcasterAdapter } from "./infrastructure/realtime/realtime-broadcaster-adapter.js";
@@ -82,11 +83,14 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   const email = createEmailSender();
   const audit = new PostgresAuditLogRepository();
   const loginThrottle = new LoginThrottleService(new PostgresLoginThrottleRepository(), throttleSecret);
+  const passwordResetTokens = new PostgresPasswordResetTokenStore();
 
   const ipRateLimit = {
     login: createIpRateLimiter({ windowMs: FIFTEEN_MIN, max: 30, routeKey: "auth-login" }),
     registerClient: createIpRateLimiter({ windowMs: FIFTEEN_MIN, max: 25, routeKey: "auth-register-client" }),
     registerProvider: createIpRateLimiter({ windowMs: FIFTEEN_MIN, max: 25, routeKey: "auth-register-provider" }),
+    forgotPassword: createIpRateLimiter({ windowMs: FIFTEEN_MIN, max: 10, routeKey: "auth-forgot-password" }),
+    resetPassword: createIpRateLimiter({ windowMs: FIFTEEN_MIN, max: 20, routeKey: "auth-reset-password" }),
   };
 
   registerAuthenticate(app);
@@ -108,6 +112,9 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
     users,
     geo,
     passwordHasher,
+    emailSender: email,
+    passwordResetTokens,
+    audit,
     loginThrottle,
     ipRateLimit,
   });

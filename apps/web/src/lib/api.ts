@@ -522,6 +522,24 @@ export function login(payload: { email: string; password: string }) {
   });
 }
 
+export function requestPasswordReset(payload: { email: string }) {
+  return apiFetch<{ message: string }>("/auth/forgot-password", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function resetPasswordWithToken(payload: {
+  token: string;
+  password: string;
+  passwordConfirm: string;
+}) {
+  return apiFetch<{ message: string }>("/auth/reset-password", {
+    method: "POST",
+    body: payload,
+  });
+}
+
 export function getMe() {
   return apiFetch<User>("/me", { auth: true });
 }

@@ -59,4 +59,5 @@ export interface IUserRepository {
   getClientNameById(id: string): Promise<string | null>;
   getClientCoords(id: string): Promise<{ lat: number; lng: number } | null>;
   findProviderForService(providerId: string, serviceId: ServiceId): Promise<ProviderForRequest | null>;
+  updatePasswordHash(userId: string, passwordHash: string, updatedAt: string): Promise<void>;
 }

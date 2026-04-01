@@ -6,15 +6,22 @@ import { registerClient } from "../../../application/auth/register-client.js";
 import { registerProvider } from "../../../application/auth/register-provider.js";
 import { login } from "../../../application/auth/login.js";
 import { sanitizeUser } from "../../../application/auth/sanitize-user.js";
+import { requestPasswordReset } from "../../../application/auth/request-password-reset.js";
+import { completePasswordReset } from "../../../application/auth/complete-password-reset.js";
 import type { IUserRepository } from "../../../domain/ports/user-repository.js";
 import type { IPasswordHasher } from "../../../domain/ports/password-hasher.js";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";
+import type { IEmailSender } from "../../../domain/ports/email-sender.js";
+import type { IPasswordResetTokenStore } from "../../../domain/ports/password-reset-token-store.js";
+import type { IAuditLogWriter } from "../../../domain/ports/audit-log-writer.js";
 import type { LoginThrottleService } from "../../../application/security/login-throttle.js";
 import { createIpRateLimiter } from "../middleware/ip-rate-limit.js";
 import { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
 import { parseProviderRegistrationMultipart } from "../utils/provider-registration-multipart.js";
 import { serializeUnknownError } from "../utils/serialize-error.js";
+import { hashIpForAudit, userAgentSnippet } from "../utils/audit-request-context.js";
+import { safeAuditAppend } from "../utils/safe-audit.js";
 
 const emailSchema = z.string().email();
 
@@ -111,6 +118,26 @@ const loginSchema = z.object({
   password: passwordSchema,
 });
 
+const forgotPasswordSchema = z.object({
+  email: emailSchema,
+});
+
+const resetPasswordSchema = z
+  .object({
+    token: z.string().min(64, "Token invalido"),
+    password: passwordSchema,
+    passwordConfirm: z.string(),
+  })
+  .refine((data) => data.password === data.passwordConfirm, {
+    message: "Senhas nao conferem",
+    path: ["passwordConfirm"],
+  });
+
+const FORGOT_PASSWORD_RESPONSE = {
+  message:
+    "Se existir uma conta com este e-mail, enviaremos instrucoes para redefinir a senha.",
+};
+
 function handleValidation<T>(result: z.SafeParseReturnType<T, T>, reply: FastifyReply) {
   if (!result.success) {
     reply.code(400).send({
@@ -168,11 +195,16 @@ export type AuthRouteDeps = {
   users: IUserRepository;
   geo: IGeoService;
   passwordHasher: IPasswordHasher;
+  emailSender?: IEmailSender;
+  passwordResetTokens?: IPasswordResetTokenStore;
+  audit?: IAuditLogWriter;
   loginThrottle?: LoginThrottleService;
   ipRateLimit?: {
     login: ReturnType<typeof createIpRateLimiter>;
     registerClient: ReturnType<typeof createIpRateLimiter>;
     registerProvider: ReturnType<typeof createIpRateLimiter>;
+    forgotPassword: ReturnType<typeof createIpRateLimiter>;
+    resetPassword: ReturnType<typeof createIpRateLimiter>;
   };
 };
 
@@ -197,6 +229,17 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
     : {};
 
   const preLogin = deps.ipRateLimit?.login ? { preHandler: [deps.ipRateLimit.login] } : {};
+
+  const preForgotPassword = deps.ipRateLimit?.forgotPassword
+    ? { preHandler: [deps.ipRateLimit.forgotPassword] }
+    : {};
+
+  const preResetPassword = deps.ipRateLimit?.resetPassword
+    ? { preHandler: [deps.ipRateLimit.resetPassword] }
+    : {};
+
+  const auditSecret = process.env.JWT_SECRET || "dev-secret";
+  const appPublicUrl = process.env.APP_PUBLIC_URL?.trim() || "http://localhost:5173";
 
   app.post("/auth/register/client", preRegisterClient, async (request, reply) => {
     const parsed = handleValidation(clientSchema.safeParse(request.body), reply);
@@ -377,6 +420,68 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
       token,
       user: sanitizeUser(result.user),
     });
+  });
+
+  app.post("/auth/forgot-password", preForgotPassword, async (request, reply) => {
+    const parsed = handleValidation(forgotPasswordSchema.safeParse(request.body), reply);
+    if (!parsed) return;
+
+    if (!deps.passwordResetTokens || !deps.emailSender) {
+      return reply.code(503).send({ message: "Recuperacao de senha indisponivel no momento." });
+    }
+
+    await requestPasswordReset(
+      {
+        users: deps.users,
+        email: deps.emailSender,
+        tokens: deps.passwordResetTokens,
+        appPublicUrl,
+      },
+      { email: parsed.email }
+    );
+
+    return reply.send(FORGOT_PASSWORD_RESPONSE);
+  });
+
+  app.post("/auth/reset-password", preResetPassword, async (request, reply) => {
+    const parsed = handleValidation(resetPasswordSchema.safeParse(request.body), reply);
+    if (!parsed) return;
+
+    if (!deps.passwordResetTokens) {
+      return reply.code(503).send({ message: "Recuperacao de senha indisponivel no momento." });
+    }
+
+    const result = await completePasswordReset(
+      {
+        users: deps.users,
+        passwordHasher: deps.passwordHasher,
+        tokens: deps.passwordResetTokens,
+      },
+      { token: parsed.token, password: parsed.password }
+    );
+
+    if (result.ok === false) {
+      return reply.code(400).send({ message: result.message });
+    }
+
+    await safeAuditAppend(deps.audit, request.log, {
+      actorUserId: result.userId,
+      action: "password_reset_completed",
+      entityType: "user",
+      entityId: result.userId,
+      metadata: null,
+      ipHashPrefix: hashIpForAudit(clientIpFromRequest(request), auditSecret),
+      userAgentSnippet: userAgentSnippet(request),
+    });
+
+    if (deps.loginThrottle) {
+      const refreshed = await deps.users.findById(result.userId);
+      if (refreshed) {
+        await deps.loginThrottle.onSuccessfulLogin(refreshed.email.toLowerCase(), clientIpFromRequest(request));
+      }
+    }
+
+    return reply.send({ message: "Senha alterada com sucesso. Voce ja pode entrar." });
   });
 
   app.post("/auth/logout", async (_request, reply) => {

@@ -161,6 +161,14 @@ export class PostgresUserRepository implements IUserRepository {
     return { lat: Number(row.cep_lat), lng: Number(row.cep_lng) };
   }
 
+  async updatePasswordHash(userId: string, passwordHash: string, updatedAt: string): Promise<void> {
+    await this.db.query(`UPDATE users SET password_hash = $1, updated_at = $2 WHERE id = $3`, [
+      passwordHash,
+      updatedAt,
+      userId,
+    ]);
+  }
+
   async findProviderForService(providerId: string, serviceId: ServiceId): Promise<ProviderForRequest | null> {
     const result = await this.db.query(
       "SELECT id, name, radius_km, work_lat, work_lng FROM users WHERE id = $1 AND role = 'provider' AND $2 = ANY(services)",
