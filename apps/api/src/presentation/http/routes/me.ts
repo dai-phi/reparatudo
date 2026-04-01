@@ -1,22 +1,19 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { IAuditLogWriter } from "../../../domain/ports/audit-log-writer.js";
+import type { IGeoService } from "../../../domain/ports/geo-service.js";
 import { sanitizeUser } from "../../../application/auth/sanitize-user.js";
 import { normalizePhoneDigits } from "../../../application/utils/phone-digits.js";
 import type { IUserRepository } from "../../../domain/ports/user-repository.js";
-import { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
-import { PostgresGeoService } from "../../../infrastructure/geo/postgres-geo-service.js";
-import { PostgresProfileRepository } from "../../../infrastructure/persistence/repository/postgres-profile-repository.js";
-import { PostgresProviderRepository } from "../../../infrastructure/persistence/repository/postgres-provider-repository.js";
-import { PostgresUserRepository } from "../../../infrastructure/persistence/repository/postgres-user-repository.js";
+import type { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
+import type { PostgresProfileRepository } from "../../../infrastructure/persistence/repository/postgres-profile-repository.js";
+import type { PostgresProviderRepository } from "../../../infrastructure/persistence/repository/postgres-provider-repository.js";
 import { formatDate } from "../../utils/format.js";
 import { destroyPublicIdIfAny } from "../utils/cloudinary-helpers.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
 import { getHttpStatusFromError, serializeUnknownError } from "../utils/serialize-error.js";
 import { hashIpForAudit, userAgentSnippet } from "../utils/audit-request-context.js";
 import { safeAuditAppend } from "../utils/safe-audit.js";
-
-const geo = new PostgresGeoService();
 
 function clientIpFromRequest(request: import("fastify").FastifyRequest): string {
   const raw = request.ip || request.socket.remoteAddress || "";
@@ -157,17 +154,18 @@ async function mapMePayload(providers: PostgresProviderRepository, user: Record<
   });
 }
 
-export type MeRouteExtraDeps = {
+export type MeRoutesDeps = {
+  profiles: PostgresProfileRepository;
+  users: IUserRepository;
+  providers: PostgresProviderRepository;
+  geo: IGeoService;
+  cloudinary: CloudinaryService | null;
   audit?: IAuditLogWriter;
 };
 
-export async function registerMeRoutes(
-  app: FastifyInstance,
-  profiles: PostgresProfileRepository = new PostgresProfileRepository(),
-  users: IUserRepository = new PostgresUserRepository(),
-  providers: PostgresProviderRepository = new PostgresProviderRepository(),
-  extra?: MeRouteExtraDeps
-) {
+export async function registerMeRoutes(app: FastifyInstance, deps: MeRoutesDeps) {
+  const { profiles, users, providers, geo, cloudinary } = deps;
+  const extra = { audit: deps.audit };
   const auditSecret = process.env.JWT_SECRET || "dev-secret";
   app.get("/me", { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = await profiles.findById(request.user.sub);
@@ -382,10 +380,7 @@ export async function registerMeRoutes(
       return reply.code(400).send({ message: msg });
     }
 
-    let cloudinary: CloudinaryService;
-    try {
-      cloudinary = new CloudinaryService();
-    } catch {
+    if (!cloudinary) {
       return reply.code(500).send({ message: "Servico de imagens nao configurado." });
     }
 
@@ -437,11 +432,8 @@ export async function registerMeRoutes(
       return reply.code(404).send({ message: "Usuario nao encontrado" });
     }
 
-    try {
-      const cloudinary = new CloudinaryService();
+    if (cloudinary) {
       await destroyPublicIdIfAny(cloudinary, user.photo_storage_key ?? null);
-    } catch {
-      // sem credenciais Cloudinary: limpa so a BD
     }
 
     const now = new Date().toISOString();

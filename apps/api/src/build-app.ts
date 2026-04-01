@@ -17,6 +17,7 @@ import { PostgresOpenJobRepository } from "./infrastructure/persistence/reposito
 import { PostgresAuditLogRepository } from "./infrastructure/persistence/repository/postgres-audit-log-repository.js";
 import { PostgresLoginThrottleRepository } from "./infrastructure/persistence/repository/postgres-login-throttle-repository.js";
 import { PostgresPasswordResetTokenStore } from "./infrastructure/persistence/repository/postgres-password-reset-token-store.js";
+import { CloudinaryService } from "./infrastructure/cloudinary/cloudinary-service.js";
 import { PostgresGeoService } from "./infrastructure/geo/postgres-geo-service.js";
 import { BcryptPasswordHasher } from "./infrastructure/auth/password-hasher.js";
 import { RealtimeBroadcasterAdapter } from "./infrastructure/realtime/realtime-broadcaster-adapter.js";
@@ -34,6 +35,14 @@ import { registerWebSocketRoute } from "./presentation/websocket/register-web-so
 import { createIpRateLimiter } from "./presentation/http/middleware/ip-rate-limit.js";
 
 const FIFTEEN_MIN = 15 * 60 * 1000;
+
+function createCloudinaryServiceOrNull(): CloudinaryService | null {
+  try {
+    return new CloudinaryService();
+  } catch {
+    return null;
+  }
+}
 
 export type BuildAppOptions = {
   logger?: boolean;
@@ -78,6 +87,7 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   const providerSearch = new PostgresProviderSearchRepository();
   const openJobs = new PostgresOpenJobRepository();
   const geo = new PostgresGeoService();
+  const cloudinary = createCloudinaryServiceOrNull();
   const passwordHasher = new BcryptPasswordHasher();
   const realtime = new RealtimeBroadcasterAdapter();
   const email = createEmailSender();
@@ -117,12 +127,20 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
     audit,
     loginThrottle,
     ipRateLimit,
+    cloudinary,
   });
-  await registerMeRoutes(app, profiles, users, providers, { audit });
+  await registerMeRoutes(app, {
+    profiles,
+    users,
+    providers,
+    geo,
+    cloudinary,
+    audit,
+  });
   await registerClientRoutes(app, clients);
-  await registerProviderRoutes(app, providers, { audit });
+  await registerProviderRoutes(app, { providers, cloudinary, audit });
   await registerRequestRoutes(app, { users, requests, geo, realtime, email, audit });
-  await registerProviderSearchRoutes(app, providerSearch);
+  await registerProviderSearchRoutes(app, { providerSearch, geo });
   await registerOpenJobRoutes(app, { users, openJobs, geo, realtime });
 
   return app;

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
-import { PostgresClientRepository } from "../../../infrastructure/persistence/repository/postgres-client-repository.js";
+import type { PostgresClientRepository } from "../../../infrastructure/persistence/repository/postgres-client-repository.js";
 import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
 import { NO_DESCRIPTION } from "../../../domain/value-objects/messages.js";
 
@@ -33,10 +33,7 @@ function statusMeta(status: string): { label: string; chatOpen: boolean } {
   }
 }
 
-export async function registerClientRoutes(
-  app: FastifyInstance,
-  clients: PostgresClientRepository = new PostgresClientRepository()
-) {
+export async function registerClientRoutes(app: FastifyInstance, clients: PostgresClientRepository) {
   app.get("/client/requests", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "client") {
       return reply.code(403).send({ message: "Acesso negado" });

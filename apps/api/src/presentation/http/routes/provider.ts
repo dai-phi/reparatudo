@@ -5,9 +5,9 @@ import type { IAuditLogWriter } from "../../../domain/ports/audit-log-writer.js"
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../../utils/format.js";
 import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
-import { PostgresProviderRepository } from "../../../infrastructure/persistence/repository/postgres-provider-repository.js";
+import type { PostgresProviderRepository } from "../../../infrastructure/persistence/repository/postgres-provider-repository.js";
 import { NO_DESCRIPTION } from "../../../domain/value-objects/messages.js";
-import { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
+import type { CloudinaryService } from "../../../infrastructure/cloudinary/cloudinary-service.js";
 import { destroyPublicIdIfAny } from "../utils/cloudinary-helpers.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
 import { getHttpStatusFromError, serializeUnknownError } from "../utils/serialize-error.js";
@@ -190,15 +190,15 @@ function clientIpFromRequest(request: import("fastify").FastifyRequest): string 
   return String(raw).replace(/^::ffff:/, "") || "unknown";
 }
 
-export type ProviderRouteExtraDeps = {
+export type ProviderRoutesDeps = {
+  providers: PostgresProviderRepository;
+  cloudinary: CloudinaryService | null;
   audit?: IAuditLogWriter;
 };
 
-export async function registerProviderRoutes(
-  app: FastifyInstance,
-  providers: PostgresProviderRepository = new PostgresProviderRepository(),
-  extra?: ProviderRouteExtraDeps
-) {
+export async function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoutesDeps) {
+  const { providers, cloudinary } = deps;
+  const extra = { audit: deps.audit };
   const auditSecret = process.env.JWT_SECRET || "dev-secret";
   app.get("/provider/requests", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "provider") {
@@ -465,10 +465,7 @@ export async function registerProviderRoutes(
       return reply.code(400).send({ message: msg });
     }
 
-    let cloudinary: CloudinaryService;
-    try {
-      cloudinary = new CloudinaryService();
-    } catch {
+    if (!cloudinary) {
       return reply.code(500).send({ message: "Serviço de imagens não configurado." });
     }
 
@@ -538,10 +535,7 @@ export async function registerProviderRoutes(
       return reply.code(400).send({ message: msg });
     }
 
-    let cloudinary: CloudinaryService;
-    try {
-      cloudinary = new CloudinaryService();
-    } catch {
+    if (!cloudinary) {
       return reply.code(500).send({ message: "Serviço de imagens não configurado." });
     }
 
