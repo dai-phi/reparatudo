@@ -6,13 +6,13 @@ import type { IUserRepository } from "../../../domain/ports/repositories/user-re
 import type { IImageStorage } from "../../../domain/ports/image-storage.js";
 import type { IProfileRepository } from "../../../domain/ports/repositories/profile-repository.js";
 import type { IProviderRepository } from "../../../domain/ports/repositories/provider-repository.js";
-import { buildMePayload } from "../../../application/me/build-me-payload.js";
-import { uploadMyProfilePhoto, removeMyProfilePhoto } from "../../../application/me/profile-photo.js";
-import { updateClientProfile, updateProviderProfile } from "../../../application/me/update-my-profile.js";
+import { uploadMyProfilePhoto, removeMyProfilePhoto } from "../../../application/use-cases/profile/profile-photo.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
 import { getHttpStatusFromError } from "../utils/serialize-error.js";
 import { hashIpForAudit, userAgentSnippet } from "../utils/audit-request-context.js";
 import { safeAuditAppend } from "../utils/safe-audit.js";
+import { updateClientProfile, updateProviderProfile } from "../../../application/use-cases/profile/update-my-profile.js";
+import { buildMePayload } from "../../../application/use-cases/profile/build-me-payload.js";
 
 function clientIpFromRequest(request: import("fastify").FastifyRequest): string {
   const raw = request.ip || request.socket.remoteAddress || "";

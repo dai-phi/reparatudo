@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { IClientRepository } from "../../domain/ports/repositories/client-repository.js";
+import type { IClientRepository } from "../../../domain/ports/repositories/client-repository.js";
 
 export type SubmitClientRatingInput = {
   requestId: string;
