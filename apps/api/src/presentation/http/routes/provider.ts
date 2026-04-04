@@ -11,7 +11,7 @@ import { NO_DESCRIPTION } from "../../../domain/value-objects/messages.js";
 import {
   uploadVerificationDocument,
   uploadVerificationSelfie,
-} from "../../../application/provider/upload-verification-photo.js";
+} from "../../../application/use-cases/provider/upload-verification-photo.js";
 import { assertProviderImageMime, assertProviderImageSize } from "../utils/image-upload.js";
 import { getHttpStatusFromError } from "../utils/serialize-error.js";
 import { hashIpForAudit, userAgentSnippet } from "../utils/audit-request-context.js";

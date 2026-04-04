@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { mapClientHistoryRow, mapClientRequestRow } from "../../../application/client/client-request-mappers.js";
-import { submitClientRating } from "../../../application/client/submit-client-rating.js";
+import { mapClientHistoryRow, mapClientRequestRow } from "../../../application/mappers/client-request-mappers.js";
+import { submitClientRating } from "../../../application/use-cases/client/submit-client-rating.js";
 import type { IClientRepository } from "../../../domain/ports/repositories/client-repository.js";
 
 const ratingSchema = z.object({

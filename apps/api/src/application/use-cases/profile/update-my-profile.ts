@@ -1,9 +1,10 @@
-import { normalizePhoneDigits } from "../utils/phone-digits.js";
-import type { IGeoService } from "../../domain/ports/geo-service.js";
-import type { IProfileRepository } from "../../domain/ports/repositories/profile-repository.js";
-import type { IProviderRepository } from "../../domain/ports/repositories/provider-repository.js";
-import type { IUserRepository } from "../../domain/ports/repositories/user-repository.js";
+import { IGeoService } from "../../../domain/ports/geo-service.js";
+import { IProfileRepository } from "../../../domain/ports/repositories/profile-repository.js";
+import { IProviderRepository } from "../../../domain/ports/repositories/provider-repository.js";
+import { IUserRepository } from "../../../domain/ports/repositories/user-repository.js";
+import { normalizePhoneDigits } from "../../utils/phone-digits.js";
 import { buildMePayload } from "./build-me-payload.js";
+
 
 export type UpdateClientProfileInput = {
   name?: string;
