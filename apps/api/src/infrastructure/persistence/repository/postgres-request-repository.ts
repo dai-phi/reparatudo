@@ -174,13 +174,13 @@ export class PostgresRequestRepository implements IRequestRepository {
     if (params.role === "client") {
       updates.push(`client_confirmed = $${idx++}`);
       values.push(true);
+    } else {
+      updates.push(`provider_confirmed = $${idx++}`);
+      values.push(true);
       if (params.agreedValue != null && params.agreedValue > 0) {
         updates.push(`agreed_value = $${idx++}`);
         values.push(params.agreedValue);
       }
-    } else {
-      updates.push(`provider_confirmed = $${idx++}`);
-      values.push(true);
     }
 
     updates.push(`updated_at = $${idx++}`);

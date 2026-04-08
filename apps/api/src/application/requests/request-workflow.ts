@@ -359,7 +359,7 @@ export async function confirmRequest(
   | Failure
 > {
   const agreedValue =
-    params.role === "client" ? parseCurrency(params.agreedValueStr || undefined) : 0;
+    params.role === "provider" ? parseCurrency(params.agreedValueStr || undefined) : 0;
 
   const target = await deps.requests.ensureParticipant(params.requestId, params.userId, params.role);
   if (!target) {
@@ -370,7 +370,7 @@ export async function confirmRequest(
   await deps.requests.confirmStep({
     requestId: target.id,
     role: params.role,
-    agreedValue: params.role === "client" ? agreedValue : null,
+    agreedValue: params.role === "provider" ? agreedValue : null,
     now,
   });
 
@@ -395,7 +395,7 @@ export async function confirmRequest(
   const messageText = statusChanged
     ? `✅ Serviço confirmado! Valor acordado: ${agreedValueLabel}.`
     : params.role === "client"
-      ? "✅ Cliente confirmou o serviço. Aguardando prestador."
+      ? "✅ Cliente aceitou o serviço. Aguardando prestador."
       : "✅ Prestador confirmou o serviço. Aguardando cliente.";
   const messageId = randomUUID();
 

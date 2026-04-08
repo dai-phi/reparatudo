@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Send, Wrench, Star, Phone, MapPin, DollarSign, Check, X, Clock, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -214,6 +215,14 @@ const Chat = () => {
     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [messagesQuery.data]);
 
+  useEffect(() => {
+    const r = requestQuery.data;
+    if (!r || isClient) return;
+    if (r.agreedValue > 0) {
+      setAgreedValue((prev) => (prev.trim() === "" ? r.agreedValueLabel : prev));
+    }
+  }, [requestQuery.data, isClient]);
+
   const sendMessageHandler = () => {
     const trimmed = input.trim();
     if (!trimmed) return;
@@ -306,12 +315,20 @@ const Chat = () => {
 
       {/* Status banner */}
       <div className={`border-b ${banner.bg} px-4 py-2.5`}>
-        <div className="container flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <banner.icon className={`w-4 h-4 ${banner.text}`} />
-            <span className={`text-sm font-medium ${banner.text}`}>{banner.label}</span>
+        <div className="container flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <div className="flex items-center gap-2">
+              <banner.icon className={`w-4 h-4 shrink-0 ${banner.text}`} />
+              <span className={`text-sm font-medium ${banner.text}`}>{banner.label}</span>
+            </div>
+            {(uiStatus === "negotiating" || uiStatus === "waiting_provider") && (
+              <span className={`text-sm ${banner.text} opacity-90`}>
+                <span className="text-muted-foreground font-normal">· Valor combinado:</span>{" "}
+                <span className="font-medium">{agreedValueText}</span>
+              </span>
+            )}
           </div>
-          {request.agreedValue > 0 && (
+          {uiStatus !== "negotiating" && uiStatus !== "waiting_provider" && request.agreedValue > 0 && (
             <span className="text-xs text-muted-foreground">Valor: {request.agreedValueLabel}</span>
           )}
         </div>
@@ -404,23 +421,52 @@ const Chat = () => {
       </div>
 
       {(uiStatus === "waiting_provider" || uiStatus === "negotiating" || uiStatus === "confirmed") && (
-        <div className="bg-card border-t border-border p-4">
+        <div className="bg-card border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="container space-y-3">
+            <div className="flex gap-2 items-end">
+              <Textarea
+                placeholder="Digite sua mensagem…"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessageHandler();
+                  }
+                }}
+                rows={2}
+                className="min-h-[52px] max-h-[140px] resize-none py-3 flex-1"
+              />
+              <Button
+                variant="hero"
+                size="icon"
+                className="h-11 w-11 shrink-0"
+                onClick={sendMessageHandler}
+                disabled={!input.trim() || sendMutation.isPending}
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground -mt-1">Enter envia · Shift+Enter nova linha</p>
+
             {canConfirm && (
               <>
-                {isClient ? (
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-muted">
-                    <DollarSign className="w-4 h-4 text-muted-foreground" />
+                {!isClient ? (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-muted border border-border/60">
+                    <DollarSign className="w-4 h-4 text-muted-foreground shrink-0" />
                     <Input
-                      placeholder="Valor acordado (ex: R$ 150,00)"
+                      placeholder="Seu valor proposto (ex: R$ 150,00)"
                       value={agreedValue}
                       onChange={(e) => setAgreedValue(e.target.value)}
-                      className="border-0 bg-transparent h-8 focus-visible:ring-0 focus-visible:ring-offset-0"
+                      className="border-0 bg-transparent h-9 focus-visible:ring-0 focus-visible:ring-offset-0"
                     />
                   </div>
                 ) : (
-                  <div className="text-sm text-muted-foreground">
-                    Valor combinado: {agreedValueText}
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/80 border border-border/60 text-sm text-muted-foreground">
+                    <DollarSign className="w-4 h-4 shrink-0" />
+                    <span>
+                      Valor proposto pelo prestador: <span className="font-medium text-foreground">{agreedValueText}</span>
+                    </span>
                   </div>
                 )}
                 <div className="flex gap-2">
@@ -428,10 +474,10 @@ const Chat = () => {
                     variant="hero"
                     size="sm"
                     className="flex-1"
-                    onClick={() => confirmMutation.mutate(isClient ? agreedValue : undefined)}
+                    onClick={() => confirmMutation.mutate(!isClient ? agreedValue : undefined)}
                     disabled={confirmMutation.isPending}
                   >
-                    <Check className="w-4 h-4" /> Confirmar Serviço
+                    <Check className="w-4 h-4" /> {isClient ? "Aceitar serviço" : "Confirmar Serviço"}
                   </Button>
                   {canCancel && (
                     <Button variant="outline" size="sm" className="flex-1" onClick={() => cancelMutation.mutate()} disabled={cancelMutation.isPending}>
@@ -453,19 +499,6 @@ const Chat = () => {
                 </Button>
               </div>
             )}
-
-            <div className="flex gap-3">
-              <Input
-                placeholder="Digite sua mensagem..."
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendMessageHandler()}
-                className="flex-1"
-              />
-              <Button variant="hero" size="icon" onClick={sendMessageHandler} disabled={!input.trim() || sendMutation.isPending}>
-                <Send className="w-4 h-4" />
-              </Button>
-            </div>
           </div>
         </div>
       )}
