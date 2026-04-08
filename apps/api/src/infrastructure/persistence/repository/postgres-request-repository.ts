@@ -11,6 +11,7 @@ import type {
   ClientPreview,
 } from "../../../domain/ports/repositories/request-repository.js";
 import { pool as defaultPool } from "../pool.js";
+import { StatusEnum } from "../../../domain/value-objects/status-enum.js";
 
 function mapRequestRow(row: Record<string, unknown>): RequestRecord {
   const sid = String(row.service_id);
@@ -257,6 +258,16 @@ export class PostgresRequestRepository implements IRequestRepository {
       `UPDATE users SET last_service_lat = $1, last_service_lng = $2, last_service_at = $3, updated_at = $3 WHERE id = $4`,
       [params.lat, params.lng, params.now, params.providerId]
     );
+  }
+
+  async countActiveByClientAndService(clientId: string, serviceId: ServiceId): Promise<number> {
+    const activeStatuses = [StatusEnum.OPEN, StatusEnum.ACCEPTED, StatusEnum.CONFIRMED];
+    const result = await this.db.query(
+      `SELECT COUNT(*)::int AS c FROM requests
+       WHERE client_id = $1 AND service_id = $2 AND status = ANY($3::text[])`,
+      [clientId, serviceId, activeStatuses]
+    );
+    return Number(result.rows[0]?.c ?? 0);
   }
 
   async insertIncident(params: {

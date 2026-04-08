@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { IUserRepository } from "../../domain/ports/repositories/user-repository.js";
 import type { IOpenJobRepository } from "../../domain/ports/repositories/open-job-repository.js";
+import type { IRequestRepository } from "../../domain/ports/repositories/request-repository.js";
 import type { IGeoService } from "../../domain/ports/geo-service.js";
 import type { IRealtimeBroadcaster } from "../../domain/ports/realtime-broadcaster.js";
 import type { ServiceId } from "../../domain/value-objects/service-id.js";
 import { SERVICE_LABELS } from "../../domain/value-objects/service-id.js";
 import { getServiceSubtypeLabelPt } from "../../domain/value-objects/service-subtype-catalog.js";
 import { apiMessages, NO_DESCRIPTION } from "../../domain/value-objects/messages.js";
+import { MAX_ACTIVE_DEMAND_PER_SERVICE_TYPE } from "../../domain/value-objects/client-service-limits.js";
+import { countActiveDemandForClientService } from "../clients/client-service-demand.js";
 import { formatRelativeTime } from "../utils/format.js";
 import { EVENT_PROVIDER_REQUEST } from "../requests/request-workflow.js";
 
@@ -15,6 +18,7 @@ export const EVENT_OPEN_JOB_UPDATED = "open_job.updated";
 export type OpenJobWorkflowDeps = {
   users: IUserRepository;
   openJobs: IOpenJobRepository;
+  requests: IRequestRepository;
   geo: IGeoService;
   realtime: IRealtimeBroadcaster;
 };
@@ -39,6 +43,16 @@ export async function createOpenJob(
   const clientCoords = await deps.users.getClientCoords(input.clientId);
   if (!clientCoords) {
     return { status: 400, message: apiMessages.client.cepNotRegistered };
+  }
+
+  const activeDemand = await countActiveDemandForClientService(
+    deps.requests,
+    deps.openJobs,
+    input.clientId,
+    input.serviceId
+  );
+  if (activeDemand >= MAX_ACTIVE_DEMAND_PER_SERVICE_TYPE) {
+    return { status: 400, message: apiMessages.client.maxActiveDemandPerService };
   }
 
   const now = new Date().toISOString();

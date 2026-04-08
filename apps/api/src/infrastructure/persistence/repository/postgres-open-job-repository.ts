@@ -229,6 +229,15 @@ export class PostgresOpenJobRepository implements IOpenJobRepository {
     ]);
   }
 
+  async countOpenByClientAndService(clientId: string, serviceId: ServiceId): Promise<number> {
+    const result = await this.db.query(
+      `SELECT COUNT(*)::int AS c FROM open_jobs
+       WHERE client_id = $1 AND service_id = $2 AND status = 'open'`,
+      [clientId, serviceId]
+    );
+    return Number(result.rows[0]?.c ?? 0);
+  }
+
   async acceptQuoteAndCreateRequest(params: {
     quoteId: string;
     openJobId: string;

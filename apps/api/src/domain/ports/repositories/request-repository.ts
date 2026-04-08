@@ -96,4 +96,7 @@ export interface IRequestRepository {
     createdAt: string;
     updatedAt: string;
   }): Promise<void>;
+
+  /** Counts requests in open / accepted / confirmed for this client and service. */
+  countActiveByClientAndService(clientId: string, serviceId: ServiceId): Promise<number>;
 }

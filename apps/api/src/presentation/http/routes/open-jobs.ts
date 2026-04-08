@@ -6,6 +6,7 @@ import { getServiceSubtypeLabelPt, isValidServiceSubtype, normalizeServiceSubtyp
 import { formatCurrency } from "../../../application/utils/format.js";
 import type { IUserRepository } from "../../../domain/ports/repositories/user-repository.js";
 import type { IOpenJobRepository } from "../../../domain/ports/repositories/open-job-repository.js";
+import type { IRequestRepository } from "../../../domain/ports/repositories/request-repository.js";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";
 import type { IRealtimeBroadcaster } from "../../../domain/ports/realtime-broadcaster.js";
 import {
@@ -58,6 +59,7 @@ const quoteSchema = z.object({
 export type OpenJobRouteDeps = {
   users: IUserRepository;
   openJobs: IOpenJobRepository;
+  requests: IRequestRepository;
   geo: IGeoService;
   realtime: IRealtimeBroadcaster;
 };
@@ -79,6 +81,7 @@ export async function registerOpenJobRoutes(app: FastifyInstance, deps: OpenJobR
   const workflowDeps: OpenJobWorkflowDeps = {
     users: deps.users,
     openJobs: deps.openJobs,
+    requests: deps.requests,
     geo: deps.geo,
     realtime: deps.realtime,
   };

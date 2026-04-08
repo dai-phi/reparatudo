@@ -223,6 +223,7 @@ export async function registerProviderRoutes(app: FastifyInstance, deps: Provide
         id: row.id,
         client: row.client_name ?? "Cliente",
         service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
+        serviceId,
         serviceSubtype,
         serviceSubtypeLabel: getServiceSubtypeLabelPt(serviceId, serviceSubtype),
         desc: row.description || NO_DESCRIPTION,

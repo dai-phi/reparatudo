@@ -61,6 +61,8 @@ export interface RequestSummary {
   id: string;
   client: string;
   service: string;
+  /** Present from API/WS when aligned with catalog service ids (e.g. eletrica, hidraulica). */
+  serviceId?: string;
   serviceSubtype?: string | null;
   serviceSubtypeLabel?: string | null;
   desc: string;

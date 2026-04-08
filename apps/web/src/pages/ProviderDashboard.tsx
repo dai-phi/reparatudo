@@ -20,6 +20,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { getServiceTypeIcon } from "@/lib/service-type-icon";
 import {
   ApiError,
   RequestSummary,
@@ -461,7 +462,9 @@ const ProviderDashboard = () => {
                     </div>
                     {activeRequests.length > 0 ? (
                       <div className="space-y-3">
-                        {activeRequests.map((req) => (
+                        {activeRequests.map((req) => {
+                          const ServiceIcon = getServiceTypeIcon(req.serviceId ?? "reparos");
+                          return (
                           <motion.div
                             key={req.id}
                             layout
@@ -473,7 +476,7 @@ const ProviderDashboard = () => {
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                                  <Wrench className="w-5 h-5 text-accent" />
+                                  <ServiceIcon className="w-5 h-5 text-accent" />
                                 </div>
                                 <div>
                                   <p className="font-semibold text-card-foreground">{req.client}</p>
@@ -505,7 +508,8 @@ const ProviderDashboard = () => {
                               </Link>
                             </div>
                           </motion.div>
-                        ))}
+                        );
+                        })}
                       </div>
                     ) : (
                       <div className="text-sm text-muted-foreground border border-dashed rounded-xl p-4">
@@ -519,7 +523,9 @@ const ProviderDashboard = () => {
                       <h3 className="font-display text-base font-semibold text-foreground">Próximos / Em negociação</h3>
                       <span className="text-xs text-muted-foreground">{upcomingRequests.length}</span>
                     </div>
-                    {upcomingRequests.length > 0 ? upcomingRequests.map((req) => (
+                    {upcomingRequests.length > 0 ? upcomingRequests.map((req) => {
+                      const ServiceIcon = getServiceTypeIcon(req.serviceId ?? "reparos");
+                      return (
                       <motion.div
                         key={req.id}
                         layout
@@ -531,7 +537,7 @@ const ProviderDashboard = () => {
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                              <Wrench className="w-5 h-5 text-accent" />
+                              <ServiceIcon className="w-5 h-5 text-accent" />
                             </div>
                             <div>
                               <p className="font-semibold text-card-foreground">{req.client}</p>
@@ -592,7 +598,8 @@ const ProviderDashboard = () => {
                           </Link>
                         </div>
                       </motion.div>
-                    )) : (
+                      );
+                    }) : (
                       <div className="text-sm text-muted-foreground border border-dashed rounded-xl p-4">
                         Nenhum pedido em negociação ou próximo no momento.
                       </div>

@@ -5,6 +5,7 @@ import { SERVICE_IDS } from "../../../domain/value-objects/service-id.js";
 import { isValidServiceSubtype, normalizeServiceSubtype } from "../../../domain/value-objects/service-subtype-catalog.js";
 import type { IUserRepository } from "../../../domain/ports/repositories/user-repository.js";
 import type { IRequestRepository } from "../../../domain/ports/repositories/request-repository.js";
+import type { IOpenJobRepository } from "../../../domain/ports/repositories/open-job-repository.js";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";
 import type { IRealtimeBroadcaster } from "../../../domain/ports/realtime-broadcaster.js";
 import type { IEmailSender } from "../../../domain/ports/email-sender.js";
@@ -79,6 +80,7 @@ const reportIncidentSchema = z.object({
 export type RequestRouteDeps = {
   users: IUserRepository;
   requests: IRequestRepository;
+  openJobs: IOpenJobRepository;
   geo: IGeoService;
   realtime: IRealtimeBroadcaster;
   email: IEmailSender;
@@ -97,6 +99,7 @@ export async function registerRequestRoutes(app: FastifyInstance, deps: RequestR
   const workflowDeps: RequestWorkflowDeps = {
     users: deps.users,
     requests: deps.requests,
+    openJobs: deps.openJobs,
     geo: deps.geo,
     realtime: deps.realtime,
     email: deps.email,

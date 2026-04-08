@@ -30,6 +30,8 @@ export const apiMessages = {
     client: {
       notFound: "Cliente não encontrado",
       cepNotRegistered: "CEP do cliente não cadastrado",
+      maxActiveDemandPerService:
+        "Você já tem 3 pedidos ativos deste tipo de serviço. Finalize ou cancele um pedido antes de abrir outro.",
     },
     service: {
       notFound: "Serviço não encontrado",

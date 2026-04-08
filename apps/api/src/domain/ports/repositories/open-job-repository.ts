@@ -110,4 +110,7 @@ export interface IOpenJobRepository {
     systemMessageId: string;
     systemMessageText: string;
   }): Promise<void>;
+
+  /** Counts open_jobs still accepting quotes for this client and service. */
+  countOpenByClientAndService(clientId: string, serviceId: ServiceId): Promise<number>;
 }

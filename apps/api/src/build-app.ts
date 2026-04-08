@@ -144,9 +144,9 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   });
   await registerClientRoutes(app, clients);
   await registerProviderRoutes(app, { providers, cloudinary, audit });
-  await registerRequestRoutes(app, { users, requests, geo, realtime, email, audit });
+  await registerRequestRoutes(app, { users, requests, openJobs, geo, realtime, email, audit });
   await registerProviderSearchRoutes(app, { providerSearch, geo });
-  await registerOpenJobRoutes(app, { users, openJobs, geo, realtime });
+  await registerOpenJobRoutes(app, { users, openJobs, requests, geo, realtime });
 
   return app;
 }

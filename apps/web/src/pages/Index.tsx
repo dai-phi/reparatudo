@@ -1,15 +1,16 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Wrench, Zap, Droplets, PaintBucket, Hammer, Shield, Star, Clock, MapPin } from "lucide-react";
+import { Wrench, Shield, Star, Clock, MapPin } from "lucide-react";
 import { motion } from "framer-motion";
 import heroImage from "@/assets/hero-handyman.jpg";
+import { getServiceTypeIcon } from "@/lib/service-type-icon";
 
 const services = [
-  { icon: Zap, label: "Elétrica", color: "from-yellow-400 to-amber-500" },
-  { icon: Droplets, label: "Hidráulica", color: "from-blue-400 to-cyan-500" },
-  { icon: PaintBucket, label: "Pintura", color: "from-pink-400 to-rose-500" },
-  { icon: Hammer, label: "Montagem", color: "from-orange-400 to-red-500" },
-  { icon: Wrench, label: "Reparos", color: "from-emerald-400 to-green-500" },
+  { id: "eletrica", label: "Elétrica", color: "from-yellow-400 to-amber-500" },
+  { id: "hidraulica", label: "Hidráulica", color: "from-blue-400 to-cyan-500" },
+  { id: "pintura", label: "Pintura", color: "from-pink-400 to-rose-500" },
+  { id: "montagem", label: "Montagem", color: "from-orange-400 to-red-500" },
+  { id: "reparos", label: "Reparos", color: "from-emerald-400 to-green-500" },
 ];
 
 const stats = [
@@ -113,7 +114,9 @@ const Index = () => {
             <p className="text-muted-foreground">Encontre o profissional certo para cada necessidade</p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {services.map((service, i) => (
+            {services.map((service, i) => {
+              const ServiceIcon = getServiceTypeIcon(service.id);
+              return (
               <motion.div
                 key={service.label}
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -124,12 +127,13 @@ const Index = () => {
               >
                 <div className="flex flex-col items-center gap-3 p-6 rounded-xl bg-card shadow-card hover:shadow-elevated transition-all duration-300 hover:-translate-y-1">
                   <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${service.color} flex items-center justify-center`}>
-                    <service.icon className="w-7 h-7 text-primary-foreground" />
+                    <ServiceIcon className="w-7 h-7 text-primary-foreground" />
                   </div>
                   <span className="font-semibold text-card-foreground">{service.label}</span>
                 </div>
               </motion.div>
-            ))}
+            );
+            })}
           </div>
         </div>
       </section>

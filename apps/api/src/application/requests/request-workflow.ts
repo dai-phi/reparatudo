@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Role } from "../../domain/entities/role.js";
 import type { IUserRepository } from "../../domain/ports/repositories/user-repository.js";
 import type { IRequestRepository } from "../../domain/ports/repositories/request-repository.js";
+import type { IOpenJobRepository } from "../../domain/ports/repositories/open-job-repository.js";
 import type { IGeoService } from "../../domain/ports/geo-service.js";
 import type { IRealtimeBroadcaster } from "../../domain/ports/realtime-broadcaster.js";
 import type { IEmailSender } from "../../domain/ports/email-sender.js";
@@ -9,6 +10,8 @@ import type { ServiceId } from "../../domain/value-objects/service-id.js";
 import { SERVICE_LABELS } from "../../domain/value-objects/service-id.js";
 import { formatRelativeTime, formatTime } from "../utils/format.js";
 import { apiMessages, NO_DESCRIPTION } from "../../domain/value-objects/messages.js";
+import { MAX_ACTIVE_DEMAND_PER_SERVICE_TYPE } from "../../domain/value-objects/client-service-limits.js";
+import { countActiveDemandForClientService } from "../clients/client-service-demand.js";
 
 export const EVENT_CHAT_MESSAGE = "chat.message";
 export const EVENT_REQUEST_UPDATED = "request.updated";
@@ -17,6 +20,7 @@ export const EVENT_PROVIDER_REQUEST = "provider.request";
 export type RequestWorkflowDeps = {
   users: IUserRepository;
   requests: IRequestRepository;
+  openJobs: IOpenJobRepository;
   geo: IGeoService;
   realtime: IRealtimeBroadcaster;
   email: IEmailSender;
@@ -190,6 +194,16 @@ export async function createRequest(
     return { status: 400, message: apiMessages.provider.outOfRadius };
   }
 
+  const activeDemand = await countActiveDemandForClientService(
+    deps.requests,
+    deps.openJobs,
+    input.clientId,
+    input.serviceId
+  );
+  if (activeDemand >= MAX_ACTIVE_DEMAND_PER_SERVICE_TYPE) {
+    return { status: 400, message: apiMessages.client.maxActiveDemandPerService };
+  }
+
   const now = new Date().toISOString();
   const requestId = randomUUID();
 
@@ -223,6 +237,7 @@ export async function createRequest(
       id: requestId,
       client: clientName,
       service: serviceLabel,
+      serviceId: input.serviceId,
       desc: input.description?.trim() || NO_DESCRIPTION,
       distance: `${distance.toFixed(1)} km`,
       time: formatRelativeTime(now),
