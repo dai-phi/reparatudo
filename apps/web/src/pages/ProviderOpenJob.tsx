@@ -89,9 +89,14 @@ const ProviderOpenJob = () => {
         ) : (
           <>
             <div>
-              <Badge variant="secondary" className="mb-2">
-                {job.serviceLabel}
-              </Badge>
+              <div className="flex flex-wrap gap-2 mb-2">
+                <Badge variant="secondary">{job.serviceLabel}</Badge>
+                {job.serviceSubtypeLabel ? (
+                  <Badge variant="outline" className="font-normal">
+                    {job.serviceSubtypeLabel}
+                  </Badge>
+                ) : null}
+              </div>
               <p className="text-sm text-muted-foreground whitespace-pre-wrap">{job.description || "Sem descricao."}</p>
             </div>
 

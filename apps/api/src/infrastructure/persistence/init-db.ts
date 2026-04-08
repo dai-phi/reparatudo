@@ -303,6 +303,8 @@ export async function initDb() {
     ALTER TABLE ratings ADD COLUMN IF NOT EXISTS provider_response_at TIMESTAMPTZ;
     ALTER TABLE requests ADD COLUMN IF NOT EXISTS open_job_id TEXT REFERENCES open_jobs(id) ON DELETE SET NULL;
     CREATE INDEX IF NOT EXISTS idx_requests_open_job ON requests(open_job_id);
+    ALTER TABLE requests ADD COLUMN IF NOT EXISTS service_subtype TEXT;
+    ALTER TABLE open_jobs ADD COLUMN IF NOT EXISTS service_subtype TEXT;
   `);
 
   await pool.query(`

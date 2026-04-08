@@ -21,8 +21,7 @@ export class PostgresProviderSearchRepository implements IProviderSearchReposito
        LEFT JOIN ratings r ON r.provider_id = u.id
        LEFT JOIN requests req ON req.provider_id = u.id AND req.accepted_at IS NOT NULL
        WHERE u.role = 'provider' AND $1 = ANY(u.services)
-       GROUP BY u.id
-       ORDER BY avg_response ASC`,
+       GROUP BY u.id`,
       [serviceId]
     );
     return result.rows;

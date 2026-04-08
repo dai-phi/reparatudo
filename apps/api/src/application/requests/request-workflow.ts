@@ -25,6 +25,7 @@ export type RequestWorkflowDeps = {
 export type CreateRequestInput = {
   clientId: string;
   serviceId: ServiceId;
+  serviceSubtype: string;
   description?: string | null;
   providerId: string;
   location: { lat: number; lng: number } | null;
@@ -197,6 +198,7 @@ export async function createRequest(
     clientId: input.clientId,
     providerId: provider.id,
     serviceId: input.serviceId,
+    serviceSubtype: input.serviceSubtype,
     description: input.description?.trim() || null,
     status: "open",
     locationLat: input.location?.lat ?? null,

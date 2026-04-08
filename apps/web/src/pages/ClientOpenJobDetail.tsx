@@ -108,6 +108,11 @@ const ClientOpenJobDetail = () => {
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <Badge variant="secondary">{job.serviceLabel}</Badge>
+                {job.serviceSubtypeLabel ? (
+                  <Badge variant="outline" className="font-normal">
+                    {job.serviceSubtypeLabel}
+                  </Badge>
+                ) : null}
                 <Badge
                   variant="outline"
                   className={cn(

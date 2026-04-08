@@ -31,6 +31,7 @@ import { registerProviderRoutes } from "./presentation/http/routes/provider.js";
 import { registerRequestRoutes } from "./presentation/http/routes/requests.js";
 import { registerProviderSearchRoutes } from "./presentation/http/routes/provider-search.js";
 import { registerOpenJobRoutes } from "./presentation/http/routes/open-jobs.js";
+import { registerServiceCatalogRoutes } from "./presentation/http/routes/service-catalog.js";
 import { registerLegalRoutes } from "./presentation/http/routes/legal.js";
 import { registerWebSocketRoute } from "./presentation/websocket/register-web-socket.js";
 import { createIpRateLimiter } from "./presentation/http/middleware/ip-rate-limit.js";
@@ -115,6 +116,8 @@ export async function buildApp(options?: BuildAppOptions): Promise<FastifyInstan
   }));
 
   app.get("/health", async () => ({ status: "ok" }));
+
+  await registerServiceCatalogRoutes(app);
 
   await registerLegalRoutes(app);
 

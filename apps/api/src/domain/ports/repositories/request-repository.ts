@@ -39,6 +39,7 @@ export interface IRequestRepository {
     clientId: string;
     providerId: string;
     serviceId: ServiceId;
+    serviceSubtype: string | null;
     description: string | null;
     status: string;
     locationLat: number | null;

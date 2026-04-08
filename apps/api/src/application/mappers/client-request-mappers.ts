@@ -1,5 +1,6 @@
 import { NO_DESCRIPTION } from "../../domain/value-objects/messages.js";
-import { SERVICE_LABELS } from "../../domain/value-objects/service-id.js";
+import { SERVICE_LABELS, isServiceId } from "../../domain/value-objects/service-id.js";
+import { getServiceSubtypeLabelPt } from "../../domain/value-objects/service-subtype-catalog.js";
 import { RequestStatusLabel, StatusEnum } from "../../domain/value-objects/status-enum.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../utils/format.js";
 
@@ -24,10 +25,15 @@ export function getClientRequestStatusMeta(status: string): { label: string; cha
 
 export function mapClientRequestRow(row: Record<string, unknown>) {
   const meta = getClientRequestStatusMeta(String(row.status));
+  const sidRaw = String(row.service_id);
+  const serviceId = isServiceId(sidRaw) ? sidRaw : "reparos";
+  const serviceSubtype = row.service_subtype != null ? String(row.service_subtype) : null;
   return {
     id: row.id,
     provider: row.provider_name ?? "Prestador",
     service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
+    serviceSubtype,
+    serviceSubtypeLabel: getServiceSubtypeLabelPt(serviceId, serviceSubtype),
     desc: row.description || NO_DESCRIPTION,
     status: String(row.status),
     statusLabel: meta.label,
@@ -37,10 +43,15 @@ export function mapClientRequestRow(row: Record<string, unknown>) {
 }
 
 export function mapClientHistoryRow(row: Record<string, unknown>) {
+  const sidRaw = String(row.service_id);
+  const serviceId = isServiceId(sidRaw) ? sidRaw : "reparos";
+  const serviceSubtype = row.service_subtype != null ? String(row.service_subtype) : null;
   return {
     id: row.id,
     provider: row.provider_name ?? "Prestador",
     service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
+    serviceSubtype,
+    serviceSubtypeLabel: getServiceSubtypeLabelPt(serviceId, serviceSubtype),
     desc: row.description || NO_DESCRIPTION,
     date: formatDate(String(row.completed_at || row.updated_at)),
     value: formatCurrency(Number(row.agreed_value || 0)),
