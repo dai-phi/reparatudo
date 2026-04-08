@@ -6,6 +6,7 @@ export type OpenJobRecord = {
   id: string;
   clientId: string;
   serviceId: ServiceId;
+  serviceSubtype: string | null;
   description: string | null;
   status: OpenJobStatus;
   locationLat: number | null;
@@ -46,6 +47,7 @@ export interface IOpenJobRepository {
     id: string;
     clientId: string;
     serviceId: ServiceId;
+    serviceSubtype: string | null;
     description: string | null;
     status: OpenJobStatus;
     locationLat: number | null;
@@ -99,6 +101,7 @@ export interface IOpenJobRepository {
     clientId: string;
     providerId: string;
     serviceId: ServiceId;
+    serviceSubtype: string | null;
     description: string | null;
     agreedValue: number;
     locationLat: number | null;

@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { IAuditLogWriter } from "../../../domain/ports/audit-log-writer.js";
-import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
+import { SERVICE_LABELS, isServiceId } from "../../../domain/value-objects/service-id.js";
+import { getServiceSubtypeLabelPt } from "../../../domain/value-objects/service-subtype-catalog.js";
 import { formatCurrency, formatDate, formatRelativeTime } from "../../../application/utils/format.js";
 import { RequestStatusLabel, StatusEnum } from "../../../domain/value-objects/status-enum.js";
 import type { IImageStorage } from "../../../domain/ports/image-storage.js";
@@ -214,11 +215,16 @@ export async function registerProviderRoutes(app: FastifyInstance, deps: Provide
       const status = String(row.status);
       const providerConfirmed = Boolean(row.provider_confirmed);
       const clientConfirmed = Boolean(row.client_confirmed);
+      const sidRaw = String(row.service_id);
+      const serviceId = isServiceId(sidRaw) ? sidRaw : "reparos";
+      const serviceSubtype = row.service_subtype != null ? String(row.service_subtype) : null;
 
       return {
         id: row.id,
         client: row.client_name ?? "Cliente",
         service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
+        serviceSubtype,
+        serviceSubtypeLabel: getServiceSubtypeLabelPt(serviceId, serviceSubtype),
         desc: row.description || NO_DESCRIPTION,
         distance: "2.3 km",
         time: formatRelativeTime(String(row.updated_at || row.created_at)),
@@ -264,10 +270,15 @@ export async function registerProviderRoutes(app: FastifyInstance, deps: Provide
 
     const items = result.map((row) => {
       const agreedValue = Number(row.agreed_value || 0);
+      const sidRaw = String(row.service_id);
+      const serviceId = isServiceId(sidRaw) ? sidRaw : "reparos";
+      const serviceSubtype = row.service_subtype != null ? String(row.service_subtype) : null;
       return {
         id: row.id,
         client: row.client_name ?? "Cliente",
         service: SERVICE_LABELS[row.service_id as keyof typeof SERVICE_LABELS] ?? row.service_id,
+        serviceSubtype,
+        serviceSubtypeLabel: getServiceSubtypeLabelPt(serviceId, serviceSubtype),
         desc: row.description || NO_DESCRIPTION,
         date: formatDate(String(row.completed_at || row.updated_at)),
         value: formatCurrency(agreedValue),

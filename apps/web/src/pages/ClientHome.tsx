@@ -16,17 +16,29 @@ import {
   createClientOpenJob,
   createRating,
   createServiceRequest,
+  fetchServiceCatalog,
   getClientHistory,
   getClientRequests,
   getProviders,
   getRequest,
   logout,
   type ProviderCard,
+  type ProviderSearchSort,
 } from "@/lib/api";
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,6 +86,10 @@ const services = [
   { id: "montagem", icon: Hammer, label: "Montagem", desc: "Móveis, prateleiras", color: "from-orange-400 to-red-500" },
   { id: "reparos", icon: Wrench, label: "Reparos Gerais", desc: "Diversos serviços", color: "from-emerald-400 to-green-500" },
 ];
+
+function formatServiceWithSubtype(service: string, subtypeLabel?: string | null) {
+  return subtypeLabel ? `${service} — ${subtypeLabel}` : service;
+}
 
 const RATING_TAGS = [
   { id: "pontual", label: "Pontual" },
@@ -131,8 +147,18 @@ const ClientHome = () => {
   const [requestMode, setRequestMode] = useState<"direct" | "open">("direct");
   const [callModalProvider, setCallModalProvider] = useState<ProviderCard | null>(null);
   const [callDescription, setCallDescription] = useState("");
+  const [providerSort, setProviderSort] = useState<ProviderSearchSort>("recommended");
+  const [providerVerifiedOnly, setProviderVerifiedOnly] = useState(false);
+  const [providerMinRating, setProviderMinRating] = useState<number | null>(null);
+  const [selectedSubtype, setSelectedSubtype] = useState<string | null>(null);
 
   const selectedServiceMeta = services.find((service) => service.id === selectedService);
+
+  const catalogQuery = useQuery({
+    queryKey: ["serviceCatalog"],
+    queryFn: fetchServiceCatalog,
+    staleTime: 60 * 60 * 1000,
+  });
 
   useEffect(() => {
     if (me && me.role !== "client") {
@@ -167,8 +193,13 @@ const ClientHome = () => {
   const historicRequests = (clientRequestsQuery.data ?? []).filter((r) => !r.chatOpen);
 
   const providersQuery = useQuery({
-    queryKey: ["providers", selectedService],
-    queryFn: () => getProviders(selectedService || ""),
+    queryKey: ["providers", selectedService, providerSort, providerVerifiedOnly, providerMinRating],
+    queryFn: () =>
+      getProviders(selectedService!, {
+        sort: providerSort,
+        verifiedOnly: providerVerifiedOnly,
+        minRating: providerMinRating ?? undefined,
+      }),
     enabled: Boolean(selectedService) && requestMode === "direct",
   });
 
@@ -192,6 +223,7 @@ const ClientHome = () => {
       createClientOpenJob({
         serviceId: selectedService!,
         description: description.trim(),
+        serviceSubtype: selectedSubtype!,
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["clientOpenJobs"] });
@@ -291,6 +323,10 @@ const ClientHome = () => {
       toast.error(UI_MESSAGES.validation.selectService);
       return;
     }
+    if (!selectedSubtype) {
+      toast.error("Selecione o detalhe do serviço.");
+      return;
+    }
     if (!callDescription.trim()) {
       toast.error(UI_MESSAGES.validation.descriptionRequired);
       return;
@@ -299,6 +335,7 @@ const ClientHome = () => {
       serviceId: selectedService,
       description: callDescription.trim(),
       providerId: callModalProvider.id,
+      serviceSubtype: selectedSubtype,
     });
   };
 
@@ -431,7 +468,7 @@ const ClientHome = () => {
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {r.service} • {r.time}
+                          {formatServiceWithSubtype(r.service, r.serviceSubtypeLabel)} • {r.time}
                         </p>
                         <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{r.desc}</p>
                       </div>
@@ -467,7 +504,7 @@ const ClientHome = () => {
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {r.service} • {r.time}
+                        {formatServiceWithSubtype(r.service, r.serviceSubtypeLabel)} • {r.time}
                       </p>
                       <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{r.desc}</p>
                       <p className="text-xs text-muted-foreground/80 mt-2">Somente leitura</p>
@@ -493,7 +530,10 @@ const ClientHome = () => {
                     <motion.button
                       key={service.id}
                       whileTap={{ scale: 0.97 }}
-                      onClick={() => setSelectedService(service.id)}
+                      onClick={() => {
+                        setSelectedService(service.id);
+                        setSelectedSubtype(null);
+                      }}
                       className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all text-center ${
                         selected
                           ? "border-accent bg-accent/5 shadow-elevated"
@@ -512,6 +552,65 @@ const ClientHome = () => {
                 })}
               </div>
             </div>
+
+            {selectedService && (
+              <div className="mb-6 space-y-2 max-w-md">
+                <Label htmlFor="service-subtype">
+                  Detalhe do serviço <span className="text-destructive">*</span>
+                </Label>
+                {catalogQuery.isLoading ? (
+                  <p className="text-sm text-muted-foreground">Carregando opções...</p>
+                ) : catalogQuery.isError || !catalogQuery.data ? (
+                  <p className="text-sm text-destructive">Não foi possível carregar os detalhes. Tente de novo.</p>
+                ) : (
+                  <Select
+                    value={selectedSubtype ?? undefined}
+                    onValueChange={(v) => setSelectedSubtype(v)}
+                  >
+                    <SelectTrigger id="service-subtype">
+                      <SelectValue placeholder="Selecione o detalhe do serviço" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(() => {
+                        const subtypes =
+                          catalogQuery.data.services.find((s) => s.id === selectedService)?.subtypes ?? [];
+                        const main = subtypes.filter((st) => !st.groupPt);
+                        const byGroup = new Map<string, typeof subtypes>();
+                        for (const st of subtypes) {
+                          if (!st.groupPt) continue;
+                          const list = byGroup.get(st.groupPt) ?? [];
+                          list.push(st);
+                          byGroup.set(st.groupPt, list);
+                        }
+                        return (
+                          <>
+                            {main.length > 0 ? (
+                              <SelectGroup>
+                                {main.map((st) => (
+                                  <SelectItem key={st.id} value={st.id}>
+                                    {st.labelPt}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            ) : null}
+                            {[...byGroup.entries()].map(([groupLabel, items]) => (
+                              <SelectGroup key={groupLabel}>
+                                <SelectLabel>{groupLabel}</SelectLabel>
+                                {items.map((st) => (
+                                  <SelectItem key={st.id} value={st.id}>
+                                    {st.labelPt}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            ))}
+                          </>
+                        );
+                      })()}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
 
             <AnimatePresence>
               {selectedService && requestMode === "open" && (
@@ -580,6 +679,62 @@ const ClientHome = () => {
                   )}
                 </div>
 
+                {!pendingRequestId && requestMode === "direct" && (
+                  <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/20 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+                    <div className="min-w-[200px] flex-1 space-y-1.5">
+                      <Label htmlFor="provider-sort" className="text-xs text-muted-foreground">
+                        Ordenar por
+                      </Label>
+                      <Select
+                        value={providerSort}
+                        onValueChange={(v) => setProviderSort(v as ProviderSearchSort)}
+                      >
+                        <SelectTrigger id="provider-sort" className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="recommended">Melhor combinação</SelectItem>
+                          <SelectItem value="distance">Mais próximos</SelectItem>
+                          <SelectItem value="rating">Melhor avaliação</SelectItem>
+                          <SelectItem value="response_time">Resposta mais rápida</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="min-w-[160px] flex-1 space-y-1.5">
+                      <Label htmlFor="provider-min-rating" className="text-xs text-muted-foreground">
+                        Nota mínima
+                      </Label>
+                      <Select
+                        value={providerMinRating === null ? "any" : String(providerMinRating)}
+                        onValueChange={(v) => {
+                          if (v === "any") setProviderMinRating(null);
+                          else setProviderMinRating(Number(v));
+                        }}
+                      >
+                        <SelectTrigger id="provider-min-rating" className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="any">Qualquer</SelectItem>
+                          <SelectItem value="3">3 estrelas ou mais</SelectItem>
+                          <SelectItem value="4">4 estrelas ou mais</SelectItem>
+                          <SelectItem value="4.5">4,5 estrelas ou mais</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center gap-2 pb-0.5 sm:pb-1">
+                      <Checkbox
+                        id="provider-verified-only"
+                        checked={providerVerifiedOnly}
+                        onCheckedChange={(c) => setProviderVerifiedOnly(c === true)}
+                      />
+                      <Label htmlFor="provider-verified-only" className="text-sm font-normal cursor-pointer">
+                        Só prestadores verificados
+                      </Label>
+                    </div>
+                  </div>
+                )}
+
                 {pendingRequestId ? (
                   <Card className="border-accent/30 bg-accent/5 shadow-card">
                     <CardHeader className="pb-2">
@@ -638,8 +793,12 @@ const ClientHome = () => {
                         type="button"
                         variant="hero"
                         className="w-full sm:w-auto"
-                        disabled={openJobMutation.isPending || !description.trim()}
+                        disabled={openJobMutation.isPending || !description.trim() || !selectedSubtype}
                         onClick={() => {
+                          if (!selectedSubtype) {
+                            toast.error("Selecione o detalhe do serviço.");
+                            return;
+                          }
                           if (!description.trim()) {
                             toast.error(UI_MESSAGES.validation.descriptionRequired);
                             return;
@@ -693,6 +852,11 @@ const ClientHome = () => {
                               <Star className="w-4 h-4 text-warning fill-warning" />
                               {provider.rating.toFixed(1)} • Tempo médio: {avgLabel}
                             </div>
+                            {providerSort === "recommended" && provider.matchScore != null && (
+                              <p className="text-xs text-muted-foreground">
+                                Combinação: {provider.matchScore.toFixed(1)} / 100
+                              </p>
+                            )}
                             <p className="text-xs text-muted-foreground">Distância: {provider.distanceKm ?? "--"} km</p>
                             {provider.lastServiceDistanceKm != null && (
                               <p className="text-xs text-muted-foreground">
@@ -704,10 +868,14 @@ const ClientHome = () => {
                             variant="hero"
                             size="sm"
                             onClick={() => {
+                              if (!selectedSubtype) {
+                                toast.error("Selecione o detalhe do serviço antes de chamar um prestador.");
+                                return;
+                              }
                               setCallModalProvider(provider);
                               setCallDescription("");
                             }}
-                            disabled={isSubmittingRequest || Boolean(pendingRequestId)}
+                            disabled={isSubmittingRequest || Boolean(pendingRequestId) || !selectedSubtype}
                           >
                             Chamar
                           </Button>
@@ -874,7 +1042,9 @@ const ClientHome = () => {
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <p className="font-semibold text-card-foreground">{svc.provider}</p>
-                      <p className="text-sm text-muted-foreground">{svc.service} • {svc.date}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatServiceWithSubtype(svc.service, svc.serviceSubtypeLabel)} • {svc.date}
+                      </p>
                     </div>
                     <span className="text-sm font-bold text-accent">{svc.value}</span>
                   </div>

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { SERVICE_IDS } from "../../../domain/value-objects/service-id.js";
+import { isValidServiceSubtype, normalizeServiceSubtype } from "../../../domain/value-objects/service-subtype-catalog.js";
 import type { IUserRepository } from "../../../domain/ports/repositories/user-repository.js";
 import type { IRequestRepository } from "../../../domain/ports/repositories/request-repository.js";
 import type { IGeoService } from "../../../domain/ports/geo-service.js";
@@ -25,17 +26,37 @@ import {
   type RequestWorkflowDeps,
 } from "../../../application/requests/request-workflow.js";
 
-const createRequestSchema = z.object({
-  serviceId: z.enum(SERVICE_IDS),
-  description: z.string().optional().nullable(),
-  providerId: z.string().optional().nullable(),
-  location: z
-    .object({
-      lat: z.number(),
-      lng: z.number(),
-    })
-    .optional(),
-});
+const createRequestSchema = z
+  .object({
+    serviceId: z.enum(SERVICE_IDS),
+    serviceSubtype: z.string().trim().min(1).max(120),
+    description: z.string().optional().nullable(),
+    providerId: z.string().optional().nullable(),
+    location: z
+      .object({
+        lat: z.number(),
+        lng: z.number(),
+      })
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    const st = normalizeServiceSubtype(data.serviceSubtype);
+    if (!st) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione o detalhe do servico.",
+        path: ["serviceSubtype"],
+      });
+      return;
+    }
+    if (!isValidServiceSubtype(data.serviceId, st)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Subtipo de servico invalido para este servico.",
+        path: ["serviceSubtype"],
+      });
+    }
+  });
 
 const messageSchema = z.object({
   text: z.string().min(1),
@@ -110,6 +131,7 @@ export async function registerRequestRoutes(app: FastifyInstance, deps: RequestR
     const result = await createRequest(workflowDeps, {
       clientId: request.user.sub,
       serviceId: parsed.data.serviceId,
+      serviceSubtype: normalizeServiceSubtype(parsed.data.serviceSubtype)!,
       description: parsed.data.description,
       providerId: parsed.data.providerId,
       location,

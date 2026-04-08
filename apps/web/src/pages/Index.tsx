@@ -68,7 +68,7 @@ const Index = () => {
               <div className="flex flex-wrap gap-4">
                 <Link to="/client/register">
                   <Button variant="hero" size="xl">
-                    Chamar Marido de Aluguel
+                    Chamar Profissional
                   </Button>
                 </Link>
                 <Link to="/provider/register">

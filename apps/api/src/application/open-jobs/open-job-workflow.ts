@@ -5,6 +5,7 @@ import type { IGeoService } from "../../domain/ports/geo-service.js";
 import type { IRealtimeBroadcaster } from "../../domain/ports/realtime-broadcaster.js";
 import type { ServiceId } from "../../domain/value-objects/service-id.js";
 import { SERVICE_LABELS } from "../../domain/value-objects/service-id.js";
+import { getServiceSubtypeLabelPt } from "../../domain/value-objects/service-subtype-catalog.js";
 import { apiMessages, NO_DESCRIPTION } from "../../domain/value-objects/messages.js";
 import { formatRelativeTime } from "../utils/format.js";
 import { EVENT_PROVIDER_REQUEST } from "../requests/request-workflow.js";
@@ -25,6 +26,7 @@ export async function createOpenJob(
   input: {
     clientId: string;
     serviceId: ServiceId;
+    serviceSubtype: string;
     description?: string | null;
     location: { lat: number; lng: number } | null;
   }
@@ -46,6 +48,7 @@ export async function createOpenJob(
     id,
     clientId: input.clientId,
     serviceId: input.serviceId,
+    serviceSubtype: input.serviceSubtype,
     description: input.description?.trim() || null,
     status: "open",
     locationLat: input.location?.lat ?? null,
@@ -81,6 +84,8 @@ export async function listDiscoverableOpenJobs(
       id: string;
       serviceId: ServiceId;
       serviceLabel: string;
+      serviceSubtype: string | null;
+      serviceSubtypeLabel: string | null;
       description: string;
       clientName: string;
       distanceKm: number;
@@ -99,6 +104,8 @@ export async function listDiscoverableOpenJobs(
     id: string;
     serviceId: ServiceId;
     serviceLabel: string;
+    serviceSubtype: string | null;
+    serviceSubtypeLabel: string | null;
     description: string;
     clientName: string;
     distanceKm: number;
@@ -121,6 +128,8 @@ export async function listDiscoverableOpenJobs(
       id: row.id,
       serviceId: row.serviceId,
       serviceLabel: SERVICE_LABELS[row.serviceId] ?? row.serviceId,
+      serviceSubtype: row.serviceSubtype,
+      serviceSubtypeLabel: getServiceSubtypeLabelPt(row.serviceId, row.serviceSubtype),
       description: row.description?.trim() || NO_DESCRIPTION,
       clientName: row.clientName,
       distanceKm: Number(distance.toFixed(1)),
@@ -241,6 +250,7 @@ export async function acceptQuote(
     clientId: job.clientId,
     providerId: quote.providerId,
     serviceId: job.serviceId,
+    serviceSubtype: job.serviceSubtype,
     description: job.description,
     agreedValue: quote.amount,
     locationLat: job.locationLat,

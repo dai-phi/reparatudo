@@ -32,6 +32,7 @@ export interface RequestRecord {
   clientId: string;
   providerId: string | null;
   serviceId: ServiceId;
+  serviceSubtype: string | null;
   description: string | null;
   status: string;
   agreedValue: number | null;

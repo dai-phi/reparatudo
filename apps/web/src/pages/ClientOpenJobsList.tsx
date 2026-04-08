@@ -4,6 +4,10 @@ import { ArrowLeft, ArrowRight, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getClientOpenJobs } from "@/lib/api";
+
+function formatServiceWithSubtype(service: string, subtypeLabel?: string | null) {
+  return subtypeLabel ? `${service} — ${subtypeLabel}` : service;
+}
 import { useRequireAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
@@ -53,7 +57,9 @@ const ClientOpenJobsList = () => {
                   className="flex items-center gap-3 p-4 rounded-xl bg-card border border-border hover:border-accent/40 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-card-foreground truncate">{job.serviceLabel}</p>
+                    <p className="font-semibold text-card-foreground truncate">
+                      {formatServiceWithSubtype(job.serviceLabel, job.serviceSubtypeLabel)}
+                    </p>
                     <p className="text-xs text-muted-foreground line-clamp-2">{job.description || "Sem descricao"}</p>
                     <div className="flex flex-wrap gap-2 mt-2">
                       <Badge

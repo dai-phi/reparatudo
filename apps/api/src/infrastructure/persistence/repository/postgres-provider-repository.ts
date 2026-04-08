@@ -17,7 +17,7 @@ export class PostgresProviderRepository implements IProviderRepository {
   async listActiveRequests(providerId: string) {
     const activeStatuses = [StatusEnum.OPEN, StatusEnum.ACCEPTED, StatusEnum.CONFIRMED];
     const result = await this.db.query(
-      `SELECT r.id, r.service_id, r.description, r.created_at, r.updated_at, r.status, r.agreed_value,
+      `SELECT r.id, r.service_id, r.service_subtype, r.description, r.created_at, r.updated_at, r.status, r.agreed_value,
               r.client_confirmed, r.provider_confirmed, u.name as client_name
        FROM requests r
        LEFT JOIN users u ON u.id = r.client_id
@@ -53,7 +53,7 @@ export class PostgresProviderRepository implements IProviderRepository {
 
   async listHistory(providerId: string) {
     const result = await this.db.query(
-      `SELECT r.id, r.service_id, r.description, r.completed_at, r.updated_at, r.agreed_value, u.name as client_name,
+      `SELECT r.id, r.service_id, r.service_subtype, r.description, r.completed_at, r.updated_at, r.agreed_value, u.name as client_name,
               ra.id AS rating_id, ra.rating, ra.review, ra.tags, ra.provider_response
        FROM requests r
        LEFT JOIN users u ON u.id = r.client_id

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { SERVICE_IDS } from "../../../domain/value-objects/service-id.js";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
+import { getServiceSubtypeLabelPt, isValidServiceSubtype, normalizeServiceSubtype } from "../../../domain/value-objects/service-subtype-catalog.js";
 import { formatCurrency } from "../../../application/utils/format.js";
 import type { IUserRepository } from "../../../domain/ports/repositories/user-repository.js";
 import type { IOpenJobRepository } from "../../../domain/ports/repositories/open-job-repository.js";
@@ -16,16 +17,36 @@ import {
   type OpenJobWorkflowDeps,
 } from "../../../application/open-jobs/open-job-workflow.js";
 
-const createOpenJobSchema = z.object({
-  serviceId: z.enum(SERVICE_IDS),
-  description: z.string().optional().nullable(),
-  location: z
-    .object({
-      lat: z.number(),
-      lng: z.number(),
-    })
-    .optional(),
-});
+const createOpenJobSchema = z
+  .object({
+    serviceId: z.enum(SERVICE_IDS),
+    serviceSubtype: z.string().trim().min(1).max(120),
+    description: z.string().optional().nullable(),
+    location: z
+      .object({
+        lat: z.number(),
+        lng: z.number(),
+      })
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    const st = normalizeServiceSubtype(data.serviceSubtype);
+    if (!st) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione o detalhe do servico.",
+        path: ["serviceSubtype"],
+      });
+      return;
+    }
+    if (!isValidServiceSubtype(data.serviceId, st)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Subtipo de servico invalido para este servico.",
+        path: ["serviceSubtype"],
+      });
+    }
+  });
 
 const quoteSchema = z.object({
   amount: z.number().positive().max(1_000_000),
@@ -81,6 +102,7 @@ export async function registerOpenJobRoutes(app: FastifyInstance, deps: OpenJobR
     const result = await createOpenJob(workflowDeps, {
       clientId: request.user.sub,
       serviceId: parsed.data.serviceId,
+      serviceSubtype: normalizeServiceSubtype(parsed.data.serviceSubtype)!,
       description: parsed.data.description,
       location,
     });
@@ -105,6 +127,8 @@ export async function registerOpenJobRoutes(app: FastifyInstance, deps: OpenJobR
           id: job.id,
           serviceId: job.serviceId,
           serviceLabel: SERVICE_LABELS[job.serviceId] ?? job.serviceId,
+          serviceSubtype: job.serviceSubtype,
+          serviceSubtypeLabel: getServiceSubtypeLabelPt(job.serviceId, job.serviceSubtype),
           description: job.description ?? "",
           status: job.status,
           quoteCount: quotes.filter((q) => q.status === "pending").length,
@@ -191,6 +215,8 @@ export async function registerOpenJobRoutes(app: FastifyInstance, deps: OpenJobR
       id: job.id,
       serviceId: job.serviceId,
       serviceLabel: SERVICE_LABELS[job.serviceId] ?? job.serviceId,
+      serviceSubtype: job.serviceSubtype,
+      serviceSubtypeLabel: getServiceSubtypeLabelPt(job.serviceId, job.serviceSubtype),
       description: job.description ?? "",
       status: job.status,
       locationLat: job.locationLat,

@@ -7,7 +7,7 @@ export class PostgresClientRepository implements IClientRepository {
 
   async listRequests(clientId: string) {
     const result = await this.db.query(
-      `SELECT r.id, r.service_id, r.description, r.status, r.created_at, r.updated_at, u.name as provider_name
+      `SELECT r.id, r.service_id, r.service_subtype, r.description, r.status, r.created_at, r.updated_at, u.name as provider_name
        FROM requests r
        LEFT JOIN users u ON u.id = r.provider_id
        WHERE r.client_id = $1
@@ -19,7 +19,7 @@ export class PostgresClientRepository implements IClientRepository {
 
   async listHistory(clientId: string) {
     const result = await this.db.query(
-      `SELECT r.id, r.service_id, r.description, r.completed_at, r.updated_at, r.agreed_value,
+      `SELECT r.id, r.service_id, r.service_subtype, r.description, r.completed_at, r.updated_at, r.agreed_value,
               u.name as provider_name, ra.rating, ra.review, ra.tags, ra.provider_response
        FROM requests r
        LEFT JOIN users u ON u.id = r.provider_id

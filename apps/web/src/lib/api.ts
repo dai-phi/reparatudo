@@ -41,10 +41,28 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface ServiceCatalogSubtype {
+  id: string;
+  labelPt: string;
+  groupPt?: string;
+}
+
+export interface ServiceCatalogEntry {
+  id: string;
+  labelPt: string;
+  subtypes: ServiceCatalogSubtype[];
+}
+
+export interface ServiceCatalogResponse {
+  services: ServiceCatalogEntry[];
+}
+
 export interface RequestSummary {
   id: string;
   client: string;
   service: string;
+  serviceSubtype?: string | null;
+  serviceSubtypeLabel?: string | null;
   desc: string;
   distance: string;
   time: string;
@@ -68,6 +86,8 @@ export interface ProviderHistoryItem {
   id: string;
   client: string;
   service: string;
+  serviceSubtype?: string | null;
+  serviceSubtypeLabel?: string | null;
   desc: string;
   date: string;
   value: string;
@@ -151,6 +171,8 @@ export interface ClientHistoryItem {
   id: string;
   provider: string;
   service: string;
+  serviceSubtype?: string | null;
+  serviceSubtypeLabel?: string | null;
   desc: string;
   date: string;
   value: string;
@@ -165,6 +187,8 @@ export interface ClientRequestItem {
   id: string;
   provider: string;
   service: string;
+  serviceSubtype?: string | null;
+  serviceSubtypeLabel?: string | null;
   desc: string;
   status: string;
   statusLabel: string;
@@ -176,6 +200,8 @@ export interface ClientOpenJobListItem {
   id: string;
   serviceId: string;
   serviceLabel: string;
+  serviceSubtype?: string | null;
+  serviceSubtypeLabel?: string | null;
   description: string;
   status: "open" | "awarded" | "cancelled";
   quoteCount: number;
@@ -212,6 +238,8 @@ export interface OpenJobDetailClient {
   id: string;
   serviceId: string;
   serviceLabel: string;
+  serviceSubtype?: string | null;
+  serviceSubtypeLabel?: string | null;
   description: string;
   status: "open" | "awarded" | "cancelled";
   locationLat: number | null;
@@ -225,6 +253,8 @@ export interface OpenJobDetailProvider {
   id: string;
   serviceId: string;
   serviceLabel: string;
+  serviceSubtype?: string | null;
+  serviceSubtypeLabel?: string | null;
   description: string;
   status: "open" | "awarded" | "cancelled";
   locationLat: number | null;
@@ -238,6 +268,8 @@ export interface ProviderOpenJobDiscoverItem {
   id: string;
   serviceId: string;
   serviceLabel: string;
+  serviceSubtype?: string | null;
+  serviceSubtypeLabel?: string | null;
   description: string;
   clientName: string;
   distanceKm: number;
@@ -250,6 +282,8 @@ export interface RequestDetails {
   status: string;
   serviceId: string;
   serviceLabel: string;
+  serviceSubtype?: string | null;
+  serviceSubtypeLabel?: string | null;
   description: string;
   agreedValue: number;
   agreedValueLabel: string;
@@ -266,6 +300,8 @@ export interface ChatMessage {
   time: string;
 }
 
+export type ProviderSearchSort = "recommended" | "distance" | "rating" | "response_time";
+
 export interface ProviderCard {
   id: string;
   name: string;
@@ -278,6 +314,8 @@ export interface ProviderCard {
   radiusKm: number;
   verificationStatus?: VerificationStatus;
   isVerified?: boolean;
+  /** Combined match score (0–100), when returned by search; higher is better. */
+  matchScore?: number;
 }
 
 export interface ProviderVerification {
@@ -426,6 +464,10 @@ export type LegalDocument = {
 
 export function fetchLegalDocument(slug: "terms" | "privacy" | "retention") {
   return apiFetch<LegalDocument>(`/legal/${slug}`);
+}
+
+export function fetchServiceCatalog() {
+  return apiFetch<ServiceCatalogResponse>("/catalog/services");
 }
 
 export function registerClient(payload: {
@@ -776,7 +818,12 @@ export function decideAdminProviderVerification(
   );
 }
 
-export function createServiceRequest(payload: { serviceId: string; description?: string; providerId: string }) {
+export function createServiceRequest(payload: {
+  serviceId: string;
+  description?: string;
+  providerId: string;
+  serviceSubtype: string;
+}) {
   return apiFetch<{ requestId: string }>("/requests", { method: "POST", auth: true, body: payload });
 }
 
@@ -787,6 +834,7 @@ export function getClientOpenJobs() {
 export function createClientOpenJob(payload: {
   serviceId: string;
   description?: string;
+  serviceSubtype: string;
   location?: { lat: number; lng: number };
 }) {
   return apiFetch<{ openJobId: string }>("/open-jobs", { method: "POST", auth: true, body: payload });
@@ -819,8 +867,17 @@ export function submitOpenJobQuote(
   return apiFetch<{ quoteId: string }>(`/open-jobs/${openJobId}/quotes`, { method: "POST", auth: true, body: payload });
 }
 
-export function getProviders(serviceId: string) {
-  return apiFetch<ProviderCard[]>(`/providers?serviceId=${serviceId}`, { auth: true });
+export function getProviders(
+  serviceId: string,
+  options?: { sort?: ProviderSearchSort; verifiedOnly?: boolean; minRating?: number }
+) {
+  const params = new URLSearchParams({ serviceId });
+  params.set("sort", options?.sort ?? "recommended");
+  if (options?.verifiedOnly) params.set("verifiedOnly", "true");
+  if (options?.minRating != null && options.minRating > 0) {
+    params.set("minRating", String(options.minRating));
+  }
+  return apiFetch<ProviderCard[]>(`/providers?${params.toString()}`, { auth: true });
 }
 
 export function getRequest(id: string) {
