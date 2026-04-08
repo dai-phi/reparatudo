@@ -3,7 +3,25 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Send, Wrench, Star, Phone, MapPin, DollarSign, Check, X, Clock, AlertTriangle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  Clock,
+  DollarSign,
+  Droplets,
+  FileText,
+  Hammer,
+  MapPin,
+  PaintBucket,
+  Phone,
+  Send,
+  Star,
+  Wrench,
+  X,
+  Zap,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,6 +39,20 @@ import {
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+
+const SERVICE_ICONS: Record<string, LucideIcon> = {
+  eletrica: Zap,
+  hidraulica: Droplets,
+  pintura: PaintBucket,
+  montagem: Hammer,
+  reparos: Wrench,
+};
+
+function serviceIconForId(serviceId: string): LucideIcon {
+  return SERVICE_ICONS[serviceId] ?? Wrench;
+}
 
 type UiStatus = "waiting_provider" | "negotiating" | "confirmed" | "cancelled" | "completed";
 
@@ -78,6 +110,7 @@ const Chat = () => {
   const [input, setInput] = useState("");
   const [agreedValue, setAgreedValue] = useState("");
   const [reportOpen, setReportOpen] = useState(false);
+  const [observationOpen, setObservationOpen] = useState(false);
   const [incidentType, setIncidentType] = useState<"fraude" | "conduta" | "cobranca" | "seguranca" | "outro">("outro");
   const [incidentDescription, setIncidentDescription] = useState("");
   const messagesEnd = useRef<HTMLDivElement>(null);
@@ -279,6 +312,8 @@ const Chat = () => {
   const whatsappUrl = whatsappDigits
     ? `https://wa.me/${whatsappDigits.startsWith("55") ? whatsappDigits : `55${whatsappDigits}`}`
     : "";
+  const ServiceIcon = serviceIconForId(request.serviceId);
+  const observationText = request.description?.trim() ?? "";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -288,9 +323,9 @@ const Chat = () => {
           <Link to={backPath} className="text-primary-foreground/70 hover:text-primary-foreground">
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div className="flex items-center gap-3 flex-1">
-            <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
-              <Wrench className="w-5 h-5 text-accent" />
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-10 h-10 shrink-0 rounded-full bg-accent/20 flex items-center justify-center">
+              <ServiceIcon className="w-5 h-5 text-accent" aria-hidden />
             </div>
             <div>
               <p className="font-semibold text-primary-foreground">{headerName}</p>
@@ -312,44 +347,67 @@ const Chat = () => {
               )}
             </div>
           </div>
-          {uiStatus === "confirmed" && isClient && whatsappUrl ? (
-            <a href={whatsappUrl} target="_blank" rel="noreferrer" className="p-2 text-primary-foreground/70 hover:text-primary-foreground">
-              <Phone className="w-5 h-5" />
-            </a>
-          ) : (
-            <button className="p-2 text-primary-foreground/40" disabled>
-              <Phone className="w-5 h-5" />
+          <div className="flex items-center shrink-0 gap-0.5">
+            <button
+              type="button"
+              onClick={() => setObservationOpen(true)}
+              className="p-2 rounded-md text-primary-foreground/70 hover:text-primary-foreground hover:bg-primary-foreground/10"
+              aria-label="Ver observação do pedido"
+            >
+              <FileText className="w-5 h-5" />
             </button>
-          )}
+            <button
+              type="button"
+              onClick={() => setReportOpen((v) => !v)}
+              className={cn(
+                "p-2 rounded-md text-primary-foreground/70 hover:text-primary-foreground hover:bg-primary-foreground/10",
+                reportOpen && "text-primary-foreground bg-primary-foreground/15",
+              )}
+              aria-label={reportOpen ? "Fechar reporte de problema" : "Reportar problema"}
+              aria-expanded={reportOpen}
+            >
+              <AlertTriangle className="w-5 h-5" />
+            </button>
+            {uiStatus === "confirmed" && isClient && whatsappUrl ? (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="p-2 rounded-md text-primary-foreground/70 hover:text-primary-foreground hover:bg-primary-foreground/10"
+                aria-label="Ligar ou abrir WhatsApp"
+              >
+                <Phone className="w-5 h-5" />
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="p-2 rounded-md text-primary-foreground/40 cursor-not-allowed"
+                aria-label="Telefone disponível após confirmação do serviço"
+              >
+                <Phone className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* Status banner */}
-      <div className={`border-b ${banner.bg} px-4 py-2.5`}>
-        <div className="container flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <div className="flex items-center gap-2">
-              <banner.icon className={`w-4 h-4 shrink-0 ${banner.text}`} />
-              <span className={`text-sm font-medium ${banner.text}`}>{banner.label}</span>
-            </div>
-            {(uiStatus === "negotiating" || uiStatus === "waiting_provider") && (
-              <span className={`text-sm ${banner.text} opacity-90`}>
-                <span className="text-muted-foreground font-normal">· Valor combinado:</span>{" "}
-                <span className="font-medium">{agreedValueText}</span>
-              </span>
-            )}
+      <Dialog open={observationOpen} onOpenChange={setObservationOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Observação do pedido</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{request.serviceLabel}</p>
+          <div className="text-sm text-foreground whitespace-pre-wrap rounded-lg border border-border bg-muted/40 p-3 min-h-[4rem]">
+            {observationText.length > 0 ? observationText : "Nenhuma observação foi enviada neste pedido."}
           </div>
-          {uiStatus !== "negotiating" && uiStatus !== "waiting_provider" && request.agreedValue > 0 && (
-            <span className="text-xs text-muted-foreground">Valor: {request.agreedValueLabel}</span>
-          )}
-        </div>
-        <div className="container mt-2">
-          <Button variant="outline" size="sm" onClick={() => setReportOpen((v) => !v)}>
-            <AlertTriangle className="w-4 h-4" /> Reportar problema
-          </Button>
-        </div>
-        {reportOpen && (
-          <div className="container mt-3 rounded-lg border border-border bg-card p-3 space-y-3">
+        </DialogContent>
+      </Dialog>
+
+      {reportOpen && (
+        <div className="border-b border-border bg-card px-4 py-3">
+          <div className="container max-w-2xl space-y-3">
+            <p className="text-sm font-medium text-foreground">Reportar problema</p>
             <div className="flex flex-wrap gap-2">
               {[
                 { id: "fraude", label: "Fraude" },
@@ -374,7 +432,7 @@ const Chat = () => {
               value={incidentDescription}
               onChange={(e) => setIncidentDescription(e.target.value)}
             />
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
                 variant="hero"
@@ -388,7 +446,28 @@ const Chat = () => {
               </Button>
             </div>
           </div>
-        )}
+        </div>
+      )}
+
+      {/* Status banner */}
+      <div className={`border-b ${banner.bg} px-4 py-2.5`}>
+        <div className="container flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <div className="flex items-center gap-2">
+              <banner.icon className={`w-4 h-4 shrink-0 ${banner.text}`} />
+              <span className={`text-sm font-medium ${banner.text}`}>{banner.label}</span>
+            </div>
+            {(uiStatus === "negotiating" || uiStatus === "waiting_provider") && (
+              <span className={`text-sm ${banner.text} opacity-90`}>
+                <span className="text-muted-foreground font-normal">· Valor combinado:</span>{" "}
+                <span className="font-medium">{agreedValueText}</span>
+              </span>
+            )}
+          </div>
+          {uiStatus !== "negotiating" && uiStatus !== "waiting_provider" && request.agreedValue > 0 && (
+            <span className="text-xs text-muted-foreground">Valor: {request.agreedValueLabel}</span>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
