@@ -27,6 +27,7 @@ import {
 } from "@/lib/api";
 import { hasFullName } from "@/lib/person-name";
 import { isValidBrazilPhone } from "@/lib/phone";
+import { planFeatureLabelPt } from "@/lib/plan-features-pt";
 import { cn } from "@/lib/utils";
 import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
@@ -37,13 +38,13 @@ type ProviderAccountSection = "profile" | "statement";
 function verificationLabel(status: VerificationStatus) {
   switch (status) {
     case "verified":
-      return "Verified";
+      return "Verificado";
     case "pending":
-      return "Pending review";
+      return "Em analise";
     case "rejected":
-      return "Rejected";
+      return "Recusado";
     default:
-      return "Not verified";
+      return "Nao verificado";
   }
 }
 
@@ -61,9 +62,9 @@ function verificationVariant(status: VerificationStatus): "default" | "secondary
 function paymentMethodLabel(method: "pix" | "credit_card" | "debit_card") {
   switch (method) {
     case "credit_card":
-      return "Credit card";
+      return "Cartao de credito";
     case "debit_card":
-      return "Debit card";
+      return "Cartao de debito";
     default:
       return "PIX";
   }
@@ -72,24 +73,24 @@ function paymentMethodLabel(method: "pix" | "credit_card" | "debit_card") {
 function paymentStatusLabel(status: "pending" | "paid" | "failed" | "cancelled") {
   switch (status) {
     case "paid":
-      return "Paid";
+      return "Pago";
     case "failed":
-      return "Failed";
+      return "Falhou";
     case "cancelled":
-      return "Cancelled";
+      return "Cancelado";
     default:
-      return "Pending";
+      return "Pendente";
   }
 }
 
 function subscriptionStatusLabel(status: "active" | "expired" | "cancelled") {
   switch (status) {
     case "expired":
-      return "Expired";
+      return "Expirada";
     case "cancelled":
-      return "Cancelled";
+      return "Cancelada";
     default:
-      return "Active";
+      return "Ativa";
   }
 }
 
@@ -168,10 +169,10 @@ const ProviderPerfil = () => {
     onSuccess: (user) => {
       setStoredUser(user);
       queryClient.invalidateQueries({ queryKey: ["me"] });
-      toast.success("Profile photo updated.");
+      toast.success(UI_MESSAGES.providerAccount.photoUpdated);
     },
     onError: (error: unknown) => {
-      toast.error(getApiErrorMessage(error, "Could not upload the profile photo."));
+      toast.error(getApiErrorMessage(error, UI_ERRORS.providerAccount.photoUpload));
     },
   });
 
@@ -180,34 +181,34 @@ const ProviderPerfil = () => {
     onSuccess: (user) => {
       setStoredUser(user);
       queryClient.invalidateQueries({ queryKey: ["me"] });
-      toast.success("Profile photo removed.");
+      toast.success(UI_MESSAGES.providerAccount.photoRemoved);
     },
     onError: (error: unknown) => {
-      toast.error(getApiErrorMessage(error, "Could not remove the profile photo."));
+      toast.error(getApiErrorMessage(error, UI_ERRORS.providerAccount.photoRemove));
     },
   });
 
   const verificationDocumentUploadMutation = useMutation({
     mutationFn: uploadProviderVerificationDocument,
     onSuccess: () => {
-      toast.success("Document uploaded successfully.");
+      toast.success(UI_MESSAGES.providerAccount.documentUploaded);
       queryClient.invalidateQueries({ queryKey: ["providerVerification"] });
       queryClient.invalidateQueries({ queryKey: ["me"] });
     },
     onError: (error: unknown) => {
-      toast.error(getApiErrorMessage(error, "Could not upload the document."));
+      toast.error(getApiErrorMessage(error, UI_ERRORS.providerAccount.documentUpload));
     },
   });
 
   const verificationSelfieUploadMutation = useMutation({
     mutationFn: uploadProviderVerificationSelfie,
     onSuccess: () => {
-      toast.success("Selfie uploaded successfully.");
+      toast.success(UI_MESSAGES.providerAccount.selfieUploaded);
       queryClient.invalidateQueries({ queryKey: ["providerVerification"] });
       queryClient.invalidateQueries({ queryKey: ["me"] });
     },
     onError: (error: unknown) => {
-      toast.error(getApiErrorMessage(error, "Could not upload the selfie."));
+      toast.error(getApiErrorMessage(error, UI_ERRORS.providerAccount.selfieUpload));
     },
   });
 
@@ -219,7 +220,7 @@ const ProviderPerfil = () => {
       queryClient.invalidateQueries({ queryKey: ["me"] });
     },
     onError: (error: unknown) => {
-      toast.error(getApiErrorMessage(error, "Could not submit the verification request."));
+      toast.error(getApiErrorMessage(error, UI_ERRORS.providerAccount.verificationSubmit));
     },
   });
 
@@ -232,17 +233,17 @@ const ProviderPerfil = () => {
     const nextErrors: Record<string, string> = {};
 
     if (profileForm.name.trim() && !hasFullName(profileForm.name)) {
-      nextErrors.name = "Enter your full name.";
+      nextErrors.name = "Informe nome completo (nome e sobrenome).";
     }
 
     if (profileForm.phone.trim() && !isValidBrazilPhone(profileForm.phone)) {
-      nextErrors.phone = "Enter a valid phone with area code.";
+      nextErrors.phone = "Telefone invalido: use DDD + numero (10 ou 11 digitos).";
     }
 
     setProfileErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
-      toast.error("Please fix the highlighted fields.");
+      toast.error("Corrija os campos destacados.");
       return;
     }
 
@@ -262,6 +263,7 @@ const ProviderPerfil = () => {
   const currentPlanDaysRemaining = currentSubscription?.daysRemaining ?? null;
   const verification = verificationQuery.data;
   const verificationStatus: VerificationStatus = verification?.status ?? me?.verificationStatus ?? "unverified";
+  const isProviderVerified = verificationStatus === "verified";
   const avatarUrl = me?.photoUrl ?? null;
 
   return (
@@ -278,7 +280,7 @@ const ProviderPerfil = () => {
             <Link
               to="/provider/dashboard"
               className="relative p-2 text-primary-foreground/70 hover:text-primary-foreground"
-              title="Orders"
+              title="Pedidos"
             >
               <Bell className="w-5 h-5" />
             </Link>
@@ -286,14 +288,14 @@ const ProviderPerfil = () => {
               type="button"
               onClick={handleLogout}
               className="p-2 text-primary-foreground/70 hover:text-primary-foreground"
-              aria-label="Log out"
+              aria-label="Sair"
             >
               <LogOut className="w-5 h-5" />
             </button>
             <Link
               to="/provider/perfil?tab=profile"
               className="w-9 h-9 rounded-full bg-accent/20 flex items-center justify-center shrink-0"
-              title="My account"
+              title="Minha conta"
             >
               <User className="w-5 h-5 text-accent" />
             </Link>
@@ -306,14 +308,14 @@ const ProviderPerfil = () => {
           to="/provider/dashboard"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
         >
-          <ArrowLeft className="w-4 h-4 shrink-0" /> Back to dashboard
+          <ArrowLeft className="w-4 h-4 shrink-0" /> Voltar ao painel
         </Link>
 
         <div className="max-w-5xl mx-auto w-full space-y-6">
           <div className="space-y-3">
-            <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Provider account</h1>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Conta do prestador</h1>
             <p className="text-sm text-muted-foreground">
-              Manage your profile, provider verification, and subscription details in one place.
+              Gerencie seus dados de contato, endereco de trabalho, verificacao de identidade e plano no mesmo lugar.
             </p>
             <ProviderAccountMenu active={activeSection} />
           </div>
@@ -322,15 +324,17 @@ const ProviderPerfil = () => {
             <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
               <Card className="border-border">
                 <CardHeader>
-                  <CardTitle className="font-display text-xl">Profile details</CardTitle>
-                  <CardDescription>Keep your provider account information up to date.</CardDescription>
+                  <CardTitle className="font-display text-xl">Dados do perfil</CardTitle>
+                  <CardDescription>
+                    Nome, telefone, e-mail, foto publica, raio de atuacao e endereco do local de trabalho.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                     {avatarUrl ? (
                       <img
                         src={avatarUrl}
-                        alt="Provider profile"
+                        alt=""
                         className="w-24 h-24 sm:w-16 sm:h-16 rounded-full object-cover mx-auto sm:mx-0 ring-2 ring-border"
                       />
                     ) : (
@@ -344,59 +348,76 @@ const ProviderPerfil = () => {
 
                     <div className="flex-1 space-y-3 text-center sm:text-left">
                       <div className="space-y-1">
-                        <p className="font-semibold text-card-foreground">{me?.name ?? "Provider"}</p>
+                        <p className="font-semibold text-card-foreground">{me?.name ?? "Prestador"}</p>
                         <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                           <Badge variant={verificationVariant(verificationStatus)} className="gap-1">
                             <ShieldCheck className="h-3 w-3" />
                             {verificationLabel(verificationStatus)}
                           </Badge>
-                          {currentPlanName ? <Badge variant="outline">{currentPlanName}</Badge> : <Badge variant="outline">No active plan</Badge>}
+                          {currentPlanName ? (
+                            <Badge variant="outline">{currentPlanName}</Badge>
+                          ) : (
+                            <Badge variant="outline">Sem plano ativo</Badge>
+                          )}
                         </div>
-                        <p className="text-sm text-muted-foreground break-all">{me?.email ?? "-"}</p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">E-mail (login)</p>
+                        <p className="text-sm text-muted-foreground break-all">{me?.email ?? "—"}</p>
                       </div>
 
-                      <div className="flex flex-wrap justify-center sm:justify-start gap-2">
-                        <input
-                          ref={profilePhotoInputRef}
-                          type="file"
-                          accept={ACCEPT_PROFILE_IMAGES}
-                          className="hidden"
-                          onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            event.target.value = "";
-                            if (file) photoUploadMutation.mutate(file);
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => profilePhotoInputRef.current?.click()}
-                          disabled={photoUploadMutation.isPending || photoDeleteMutation.isPending}
-                        >
-                          {photoUploadMutation.isPending ? "Uploading..." : avatarUrl ? "Change photo" : "Upload photo"}
-                        </Button>
-                        {avatarUrl ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => photoDeleteMutation.mutate()}
-                            disabled={photoUploadMutation.isPending || photoDeleteMutation.isPending}
-                          >
-                            {photoDeleteMutation.isPending ? "Removing..." : "Remove photo"}
-                          </Button>
-                        ) : null}
-                      </div>
+                      {isProviderVerified ? (
+                        <p className="text-sm text-muted-foreground rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                          {UI_MESSAGES.providerAccount.verifiedPhotoHint}
+                        </p>
+                      ) : (
+                        <>
+                          <div className="flex flex-wrap justify-center sm:justify-start gap-2">
+                            <input
+                              ref={profilePhotoInputRef}
+                              type="file"
+                              accept={ACCEPT_PROFILE_IMAGES}
+                              className="hidden"
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                event.target.value = "";
+                                if (file) photoUploadMutation.mutate(file);
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => profilePhotoInputRef.current?.click()}
+                              disabled={photoUploadMutation.isPending || photoDeleteMutation.isPending}
+                            >
+                              {photoUploadMutation.isPending
+                                ? "Enviando..."
+                                : avatarUrl
+                                  ? "Trocar foto"
+                                  : "Enviar foto"}
+                            </Button>
+                            {avatarUrl ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => photoDeleteMutation.mutate()}
+                                disabled={photoUploadMutation.isPending || photoDeleteMutation.isPending}
+                              >
+                                {photoDeleteMutation.isPending ? "Removendo..." : "Remover foto"}
+                              </Button>
+                            ) : null}
+                          </div>
 
-                      <p className="text-xs text-muted-foreground">JPEG, PNG, or WebP up to 5 MB.</p>
+                          <p className="text-xs text-muted-foreground">JPEG, PNG ou WebP. Ate 5 MB.</p>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2 sm:col-span-2">
-                      <Label htmlFor="provider-name">Full name</Label>
+                      <Label htmlFor="provider-name">Nome completo</Label>
                       <Input
                         id="provider-name"
                         value={profileForm.name}
@@ -406,7 +427,7 @@ const ProviderPerfil = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="provider-phone">Phone</Label>
+                      <Label htmlFor="provider-phone">Telefone (contato)</Label>
                       <Input
                         id="provider-phone"
                         value={profileForm.phone}
@@ -416,7 +437,7 @@ const ProviderPerfil = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="provider-radius">Service radius (km)</Label>
+                      <Label htmlFor="provider-radius">Raio de atuacao (km)</Label>
                       <Input
                         id="provider-radius"
                         type="number"
@@ -428,7 +449,7 @@ const ProviderPerfil = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="provider-cep">Work CEP</Label>
+                      <Label htmlFor="provider-cep">CEP do local de trabalho</Label>
                       <Input
                         id="provider-cep"
                         placeholder="00000-000"
@@ -437,11 +458,11 @@ const ProviderPerfil = () => {
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="provider-address">Work address</Label>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="provider-address">Endereco completo do trabalho</Label>
                       <Input
                         id="provider-address"
-                        placeholder="Street, number, district, city, state"
+                        placeholder="Rua, numero, bairro, cidade, estado (conforme cadastro)"
                         value={profileForm.workAddress}
                         onChange={(event) => setProfileForm((prev) => ({ ...prev, workAddress: event.target.value }))}
                       />
@@ -449,7 +470,7 @@ const ProviderPerfil = () => {
                   </div>
 
                   <Button variant="hero" onClick={handleSaveProfile} disabled={updateMutation.isPending}>
-                    {updateMutation.isPending ? "Saving..." : "Save changes"}
+                    {updateMutation.isPending ? "Salvando..." : "Salvar alteracoes"}
                   </Button>
                 </CardContent>
               </Card>
@@ -457,12 +478,16 @@ const ProviderPerfil = () => {
               <div className="space-y-6">
                 <Card className="border-border">
                   <CardHeader>
-                    <CardTitle className="font-display text-xl">Current plan</CardTitle>
-                    <CardDescription>Shows which plan is registered for this provider account.</CardDescription>
+                    <CardTitle className="font-display text-xl">Plano atual</CardTitle>
+                    <CardDescription>Plano contratado e situacao da assinatura desta conta.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {plansQuery.isLoading && !currentPlanName ? <p className="text-sm text-muted-foreground">Loading plan details...</p> : null}
-                    {plansQuery.isError && !currentPlanName ? <p className="text-sm text-destructive">Could not load the current plan.</p> : null}
+                    {plansQuery.isLoading && !currentPlanName ? (
+                      <p className="text-sm text-muted-foreground">Carregando plano...</p>
+                    ) : null}
+                    {plansQuery.isError && !currentPlanName ? (
+                      <p className="text-sm text-destructive">Nao foi possivel carregar o plano atual.</p>
+                    ) : null}
 
                     {currentPlanName ? (
                       <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
@@ -476,34 +501,36 @@ const ProviderPerfil = () => {
                         </div>
                         <div className="space-y-1 text-sm text-muted-foreground">
                           <p>
-                            Expires on <strong>{currentPlanExpiresLabel ?? "-"}</strong>.
+                            Vencimento em <strong>{currentPlanExpiresLabel ?? "—"}</strong>.
                           </p>
                           {typeof currentPlanDaysRemaining === "number" ? (
                             <p>
-                              <strong>{currentPlanDaysRemaining}</strong> day(s) remaining in the current cycle.
+                              <strong>{currentPlanDaysRemaining}</strong> dia(s) restante(s) no ciclo atual.
                             </p>
                           ) : null}
                         </div>
                       </div>
                     ) : (
                       <div className="rounded-xl border border-dashed border-border p-4 space-y-2">
-                        <p className="font-medium text-foreground">No active plan.</p>
+                        <p className="font-medium text-foreground">Nenhum plano ativo</p>
                         <p className="text-sm text-muted-foreground">
-                          Go to the plans page to register a subscription for this provider.
+                          Acesse a pagina de planos para contratar uma assinatura.
                         </p>
                       </div>
                     )}
 
                     <Button asChild variant="outline" className="w-full sm:w-auto">
-                      <Link to="/provider/plans">Open plans page</Link>
+                      <Link to="/provider/plans">Ver planos</Link>
                     </Button>
                   </CardContent>
                 </Card>
 
                 <Card className="border-border">
                   <CardHeader>
-                    <CardTitle className="font-display text-xl">Provider verification</CardTitle>
-                    <CardDescription>Upload the document and selfie used in the verification review.</CardDescription>
+                    <CardTitle className="font-display text-xl">Verificacao de identidade</CardTitle>
+                    <CardDescription>
+                      Envie documento oficial e selfie para analise (quando sua conta ainda nao estiver verificada).
+                    </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex flex-wrap items-center gap-2">
@@ -512,112 +539,132 @@ const ProviderPerfil = () => {
                         {verificationLabel(verificationStatus)}
                       </Badge>
                       {verificationStatus === "pending" ? (
-                        <span className="text-xs text-muted-foreground">Your request is waiting for admin review.</span>
+                        <span className="text-xs text-muted-foreground">Seu envio esta na fila de analise.</span>
                       ) : null}
                     </div>
 
-                    {verificationQuery.isError ? <p className="text-sm text-destructive">Could not load the verification details.</p> : null}
+                    {verificationQuery.isError ? (
+                      <p className="text-sm text-destructive">{UI_ERRORS.providerAccount.verificationLoad}</p>
+                    ) : null}
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>Document (RG/CNH)</Label>
-                        <input
-                          ref={verificationDocumentInputRef}
-                          type="file"
-                          accept={ACCEPT_PROFILE_IMAGES}
-                          className="hidden"
-                          onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            event.target.value = "";
-                            if (file) verificationDocumentUploadMutation.mutate(file);
-                          }}
-                        />
+                    {isProviderVerified ? (
+                      <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 flex gap-3 items-start">
+                        <ShieldCheck className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <p className="font-medium text-foreground">{UI_MESSAGES.providerAccount.verifiedKycTitle}</p>
+                          <p className="text-sm text-muted-foreground">{UI_MESSAGES.providerAccount.verifiedKycDescription}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>Documento (RG ou CNH)</Label>
+                            <input
+                              ref={verificationDocumentInputRef}
+                              type="file"
+                              accept={ACCEPT_PROFILE_IMAGES}
+                              className="hidden"
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                event.target.value = "";
+                                if (file) verificationDocumentUploadMutation.mutate(file);
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full"
+                              onClick={() => verificationDocumentInputRef.current?.click()}
+                              disabled={
+                                verificationDocumentUploadMutation.isPending || verificationStatus === "pending"
+                              }
+                            >
+                              {verificationDocumentUploadMutation.isPending
+                                ? "Enviando documento..."
+                                : verification?.documentUrl
+                                  ? "Substituir documento"
+                                  : "Enviar documento"}
+                            </Button>
+                            {verification?.documentUrl ? (
+                              <a
+                                href={verification.documentUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                              >
+                                Ver arquivo <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">Nenhum documento enviado ainda.</p>
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Selfie segurando o documento</Label>
+                            <input
+                              ref={verificationSelfieInputRef}
+                              type="file"
+                              accept={ACCEPT_PROFILE_IMAGES}
+                              className="hidden"
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                event.target.value = "";
+                                if (file) verificationSelfieUploadMutation.mutate(file);
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full"
+                              onClick={() => verificationSelfieInputRef.current?.click()}
+                              disabled={
+                                verificationSelfieUploadMutation.isPending || verificationStatus === "pending"
+                              }
+                            >
+                              {verificationSelfieUploadMutation.isPending
+                                ? "Enviando selfie..."
+                                : verification?.selfieUrl
+                                  ? "Substituir selfie"
+                                  : "Enviar selfie"}
+                            </Button>
+                            {verification?.selfieUrl ? (
+                              <a
+                                href={verification.selfieUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                              >
+                                Ver arquivo <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">Nenhuma selfie enviada ainda.</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground space-y-1">
+                          <p>Documento: {verification?.documentUrl ? "enviado" : "pendente"}</p>
+                          <p>Selfie: {verification?.selfieUrl ? "enviada" : "pendente"}</p>
+                        </div>
+
                         <Button
                           type="button"
-                          variant="outline"
-                          className="w-full"
-                          onClick={() => verificationDocumentInputRef.current?.click()}
-                          disabled={verificationDocumentUploadMutation.isPending}
+                          variant="hero"
+                          disabled={
+                            verificationSubmitMutation.isPending ||
+                            !verification?.canSubmit ||
+                            verificationStatus === "pending" ||
+                            verificationStatus === "verified"
+                          }
+                          onClick={() => verificationSubmitMutation.mutate()}
                         >
-                          {verificationDocumentUploadMutation.isPending
-                            ? "Uploading document..."
-                            : verification?.documentUrl
-                              ? "Replace document"
-                              : "Upload document"}
+                          {verificationSubmitMutation.isPending
+                            ? "Enviando..."
+                            : "Solicitar verificacao"}
                         </Button>
-                        {verification?.documentUrl ? (
-                          <a
-                            href={verification.documentUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                          >
-                            View file <ExternalLink className="h-3 w-3" />
-                          </a>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">No document uploaded yet.</p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Selfie with document</Label>
-                        <input
-                          ref={verificationSelfieInputRef}
-                          type="file"
-                          accept={ACCEPT_PROFILE_IMAGES}
-                          className="hidden"
-                          onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            event.target.value = "";
-                            if (file) verificationSelfieUploadMutation.mutate(file);
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full"
-                          onClick={() => verificationSelfieInputRef.current?.click()}
-                          disabled={verificationSelfieUploadMutation.isPending}
-                        >
-                          {verificationSelfieUploadMutation.isPending
-                            ? "Uploading selfie..."
-                            : verification?.selfieUrl
-                              ? "Replace selfie"
-                              : "Upload selfie"}
-                        </Button>
-                        {verification?.selfieUrl ? (
-                          <a
-                            href={verification.selfieUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                          >
-                            View file <ExternalLink className="h-3 w-3" />
-                          </a>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">No selfie uploaded yet.</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground space-y-1">
-                      <p>Document: {verification?.documentUrl ? "uploaded" : "pending"}</p>
-                      <p>Selfie: {verification?.selfieUrl ? "uploaded" : "pending"}</p>
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="hero"
-                      disabled={
-                        verificationSubmitMutation.isPending ||
-                        !verification?.canSubmit ||
-                        verificationStatus === "pending" ||
-                        verificationStatus === "verified"
-                      }
-                      onClick={() => verificationSubmitMutation.mutate()}
-                    >
-                      {verificationSubmitMutation.isPending ? "Submitting..." : "Submit verification"}
-                    </Button>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -626,18 +673,22 @@ const ProviderPerfil = () => {
             <div className="space-y-6">
               <Card className="border-border">
                 <CardHeader>
-                  <CardTitle className="font-display text-xl">Subscription summary</CardTitle>
-                  <CardDescription>Current plan, renewal window, and coverage of the provider account.</CardDescription>
+                  <CardTitle className="font-display text-xl">Resumo da assinatura</CardTitle>
+                  <CardDescription>Plano ativo, datas de vigencia e valor do ciclo de cobranca.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {plansQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading subscription...</p> : null}
-                  {plansQuery.isError ? <p className="text-sm text-destructive">Could not load the subscription summary.</p> : null}
+                  {plansQuery.isLoading ? (
+                    <p className="text-sm text-muted-foreground">Carregando assinatura...</p>
+                  ) : null}
+                  {plansQuery.isError ? (
+                    <p className="text-sm text-destructive">Nao foi possivel carregar o resumo da assinatura.</p>
+                  ) : null}
 
                   {!plansQuery.isLoading && !plansQuery.isError && currentSubscription ? (
                     <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 space-y-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <p className="text-sm text-muted-foreground">Active subscription</p>
+                          <p className="text-sm text-muted-foreground">Assinatura ativa</p>
                           <p className="font-display text-2xl font-bold text-foreground">{currentSubscription.planName}</p>
                         </div>
                         <Badge variant={currentSubscription.status === "active" ? "default" : "secondary"}>
@@ -647,29 +698,29 @@ const ProviderPerfil = () => {
 
                       <div className="grid gap-4 sm:grid-cols-3 text-sm">
                         <div>
-                          <p className="text-muted-foreground">Started on</p>
+                          <p className="text-muted-foreground">Inicio</p>
                           <p className="font-medium text-foreground">{currentSubscription.startsAtLabel}</p>
                         </div>
                         <div>
-                          <p className="text-muted-foreground">Expires on</p>
+                          <p className="text-muted-foreground">Vencimento</p>
                           <p className="font-medium text-foreground">{currentSubscription.expiresAtLabel}</p>
                         </div>
                         <div>
-                          <p className="text-muted-foreground">Cycle value</p>
+                          <p className="text-muted-foreground">Valor do ciclo</p>
                           <p className="font-medium text-foreground">{currentSubscription.priceLabel}</p>
                         </div>
                       </div>
 
                       <p className={cn("text-sm", currentSubscription.daysRemaining > 7 ? "text-muted-foreground" : "text-amber-600")}>
-                        {currentSubscription.daysRemaining} day(s) remaining in this cycle.
+                        {currentSubscription.daysRemaining} dia(s) restante(s) neste ciclo.
                       </p>
 
                       <div className="space-y-2">
-                        <p className="text-sm font-medium text-foreground">Included features</p>
+                        <p className="text-sm font-medium text-foreground">Beneficios do plano</p>
                         <ul className="grid gap-2 sm:grid-cols-2">
                           {currentSubscription.features.map((feature) => (
                             <li key={feature} className="rounded-lg bg-background/80 px-3 py-2 text-sm text-muted-foreground border border-border/60">
-                              {feature}
+                              {planFeatureLabelPt(feature)}
                             </li>
                           ))}
                         </ul>
@@ -679,28 +730,32 @@ const ProviderPerfil = () => {
 
                   {!plansQuery.isLoading && !plansQuery.isError && !currentSubscription ? (
                     <div className="rounded-xl border border-dashed border-border p-4 space-y-2">
-                      <p className="font-medium text-foreground">No active subscription.</p>
-                      <p className="text-sm text-muted-foreground">Register a plan to keep the provider account enabled.</p>
+                      <p className="font-medium text-foreground">Nenhuma assinatura ativa</p>
+                      <p className="text-sm text-muted-foreground">Contrate um plano para manter a conta do prestador ativa.</p>
                     </div>
                   ) : null}
 
                   <Button asChild variant="outline" className="w-full sm:w-auto">
-                    <Link to="/provider/plans">Manage plans</Link>
+                    <Link to="/provider/plans">Gerir planos</Link>
                   </Button>
                 </CardContent>
               </Card>
 
               <Card className="border-border">
                 <CardHeader>
-                  <CardTitle className="font-display text-xl">Payment history</CardTitle>
-                  <CardDescription>Mocked payment records generated when the provider purchases a plan.</CardDescription>
+                  <CardTitle className="font-display text-xl">Historico de pagamentos</CardTitle>
+                  <CardDescription>Registros de pagamento ao contratar ou renovar planos.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {paymentsQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading payment history...</p> : null}
-                  {paymentsQuery.isError ? <p className="text-sm text-destructive">Could not load the payment history.</p> : null}
+                  {paymentsQuery.isLoading ? (
+                    <p className="text-sm text-muted-foreground">Carregando historico...</p>
+                  ) : null}
+                  {paymentsQuery.isError ? (
+                    <p className="text-sm text-destructive">Nao foi possivel carregar o historico de pagamentos.</p>
+                  ) : null}
 
                   {!paymentsQuery.isLoading && !paymentsQuery.isError && paymentsQuery.data?.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No payment records yet.</p>
+                    <p className="text-sm text-muted-foreground">Nenhum pagamento registrado ainda.</p>
                   ) : null}
 
                   {!paymentsQuery.isLoading && !paymentsQuery.isError && paymentsQuery.data && paymentsQuery.data.length > 0 ? (
@@ -708,11 +763,11 @@ const ProviderPerfil = () => {
                       <table className="w-full min-w-[720px] text-sm">
                         <thead>
                           <tr className="border-b text-left text-muted-foreground">
-                            <th className="pb-3 pr-3 font-medium">Plan</th>
-                            <th className="pb-3 pr-3 font-medium">Amount</th>
-                            <th className="pb-3 pr-3 font-medium">Method</th>
-                            <th className="pb-3 pr-3 font-medium">Coverage</th>
-                            <th className="pb-3 pr-3 font-medium">Paid at</th>
+                            <th className="pb-3 pr-3 font-medium">Plano</th>
+                            <th className="pb-3 pr-3 font-medium">Valor</th>
+                            <th className="pb-3 pr-3 font-medium">Forma de pagamento</th>
+                            <th className="pb-3 pr-3 font-medium">Vigencia</th>
+                            <th className="pb-3 pr-3 font-medium">Pago em</th>
                             <th className="pb-3 font-medium">Status</th>
                           </tr>
                         </thead>
@@ -722,15 +777,15 @@ const ProviderPerfil = () => {
                               <td className="py-3 pr-3">
                                 <div className="space-y-1">
                                   <p className="font-medium text-foreground">{payment.planName}</p>
-                                  <p className="text-xs text-muted-foreground">Mock ID: {payment.mockTransactionId}</p>
+                                  <p className="text-xs text-muted-foreground">Ref.: {payment.mockTransactionId}</p>
                                 </div>
                               </td>
                               <td className="py-3 pr-3 whitespace-nowrap">{payment.amountLabel}</td>
                               <td className="py-3 pr-3 whitespace-nowrap">{paymentMethodLabel(payment.paymentMethod)}</td>
                               <td className="py-3 pr-3 whitespace-nowrap">
-                                {payment.coverageStartsAtLabel} to {payment.coverageEndsAtLabel}
+                                {payment.coverageStartsAtLabel} a {payment.coverageEndsAtLabel}
                               </td>
-                              <td className="py-3 pr-3 whitespace-nowrap">{payment.paidAtLabel ?? "-"}</td>
+                              <td className="py-3 pr-3 whitespace-nowrap">{payment.paidAtLabel ?? "—"}</td>
                               <td className="py-3">
                                 <Badge variant={payment.status === "paid" ? "default" : payment.status === "failed" ? "destructive" : "secondary"}>
                                   {paymentStatusLabel(payment.status)}

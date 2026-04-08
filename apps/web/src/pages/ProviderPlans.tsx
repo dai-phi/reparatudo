@@ -19,11 +19,12 @@ import {
   type ProviderPlanPaymentMethod,
   type ProviderPlanPaymentRow,
 } from "@/lib/api";
+import { planFeatureLabelPt } from "@/lib/plan-features-pt";
 import { cn } from "@/lib/utils";
 import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
 function planLabel(planId: ProviderPlanId) {
-  return planId === "standard" ? "Plano padrao" : "Plano Pro";
+  return planId === "standard" ? "Plano Padrao" : "Plano Pro";
 }
 
 function paymentMethodLabel(method: ProviderPlanPaymentMethod) {
@@ -159,7 +160,7 @@ const ProviderPlans = () => {
           <div className="space-y-3">
             <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Planos do prestador</h1>
             <p className="text-sm text-muted-foreground">
-              Escolha o plano que mantem sua conta ativa para receber servicos na plataforma.
+              Escolha o plano que mantem sua conta ativa para receber servicos como prestador na plataforma.
             </p>
             <ProviderAccountMenu active="plans" />
           </div>
@@ -167,7 +168,7 @@ const ProviderPlans = () => {
           <Card className="border-border">
             <CardHeader>
               <CardTitle className="font-display text-lg sm:text-xl">Plano atual</CardTitle>
-              <CardDescription>Mostra qual plano esta vinculado ao provider no momento.</CardDescription>
+              <CardDescription>Mostra qual plano esta vinculado ao seu cadastro de prestador no momento.</CardDescription>
             </CardHeader>
             <CardContent>
               {plansQuery.isLoading && <p className="text-sm text-muted-foreground">Carregando plano atual...</p>}
@@ -192,7 +193,7 @@ const ProviderPlans = () => {
                 <div className="rounded-xl border border-dashed border-border p-4 sm:p-5">
                   <p className="font-medium text-foreground">Nenhum plano ativo.</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Escolha um plano abaixo para ativar a assinatura do provider.
+                    Escolha um plano abaixo para ativar sua assinatura de prestador.
                   </p>
                 </div>
               )}
@@ -230,7 +231,7 @@ const ProviderPlans = () => {
                     <ul className="space-y-2 text-sm text-muted-foreground">
                       {plan.features.map((feature) => (
                         <li key={feature} className="rounded-lg bg-muted/40 px-3 py-2">
-                          {feature}
+                          {planFeatureLabelPt(feature)}
                         </li>
                       ))}
                     </ul>
@@ -249,9 +250,9 @@ const ProviderPlans = () => {
 
             <Card className="border-border h-fit">
               <CardHeader>
-                <CardTitle className="font-display text-lg sm:text-xl">Pagamento mockado</CardTitle>
+                <CardTitle className="font-display text-lg sm:text-xl">Simulacao de pagamento</CardTitle>
                 <CardDescription>
-                  O pagamento ainda e demonstrativo. A compra apenas registra o plano e o historico da assinatura.
+                  O pagamento e apenas de demonstracao. A compra registra o plano e o historico da assinatura na conta.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -327,7 +328,7 @@ const ProviderPlans = () => {
                 </Button>
 
                 <p className="text-xs text-muted-foreground">
-                  Metodo selecionado: <strong>{paymentMethodLabel(paymentMethod)}</strong>.
+                  Forma escolhida: <strong>{paymentMethodLabel(paymentMethod)}</strong>.
                 </p>
 
                 {lastReceipt && (

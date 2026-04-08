@@ -46,6 +46,16 @@ export const UI_MESSAGES = {
     purchaseCompleted: "Plano registrado com sucesso!",
     pixCodeCopied: "Codigo PIX copiado!",
   },
+  providerAccount: {
+    photoUpdated: "Foto de perfil atualizada.",
+    photoRemoved: "Foto de perfil removida.",
+    documentUploaded: "Documento enviado com sucesso.",
+    selfieUploaded: "Selfie enviada com sucesso.",
+    verifiedPhotoHint: "Conta verificada — tudo certo com seu perfil.",
+    verifiedKycTitle: "Conta verificada",
+    verifiedKycDescription:
+      "Sua identidade ja foi conferida. Nao e necessario enviar novos documentos ou selfies.",
+  },
   validation: {
     selectService: "Selecione um servico",
     selectRating: "Selecione uma nota",
@@ -91,5 +101,13 @@ export const UI_ERRORS = {
   plans: {
     purchase: "Nao foi possivel concluir a compra do plano",
     copyPix: "Nao foi possivel copiar o codigo PIX",
+  },
+  providerAccount: {
+    photoUpload: "Nao foi possivel enviar a foto de perfil.",
+    photoRemove: "Nao foi possivel remover a foto de perfil.",
+    documentUpload: "Nao foi possivel enviar o documento.",
+    selfieUpload: "Nao foi possivel enviar a selfie.",
+    verificationSubmit: "Nao foi possivel enviar o pedido de verificacao.",
+    verificationLoad: "Nao foi possivel carregar os dados de verificacao.",
   },
 } as const;
