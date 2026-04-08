@@ -21,6 +21,7 @@ function mapOpenJob(row: Record<string, unknown>): OpenJobRecord {
     id: String(row.id),
     clientId: String(row.client_id),
     serviceId: mapServiceId(String(row.service_id)),
+    serviceSubtype: row.service_subtype != null ? String(row.service_subtype) : null,
     description: row.description != null ? String(row.description) : null,
     status: String(row.status) as OpenJobStatus,
     locationLat: row.location_lat != null ? Number(row.location_lat) : null,
@@ -52,6 +53,7 @@ export class PostgresOpenJobRepository implements IOpenJobRepository {
     id: string;
     clientId: string;
     serviceId: ServiceId;
+    serviceSubtype: string | null;
     description: string | null;
     status: OpenJobStatus;
     locationLat: number | null;
@@ -61,12 +63,13 @@ export class PostgresOpenJobRepository implements IOpenJobRepository {
   }): Promise<void> {
     await this.db.query(
       `INSERT INTO open_jobs (
-        id, client_id, service_id, description, status, location_lat, location_lng, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        id, client_id, service_id, service_subtype, description, status, location_lat, location_lng, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         params.id,
         params.clientId,
         params.serviceId,
+        params.serviceSubtype,
         params.description,
         params.status,
         params.locationLat,
@@ -233,6 +236,7 @@ export class PostgresOpenJobRepository implements IOpenJobRepository {
     clientId: string;
     providerId: string;
     serviceId: ServiceId;
+    serviceSubtype: string | null;
     description: string | null;
     agreedValue: number;
     locationLat: number | null;
@@ -263,15 +267,16 @@ export class PostgresOpenJobRepository implements IOpenJobRepository {
 
       await client.query(
         `INSERT INTO requests (
-          id, client_id, provider_id, service_id, description, status,
+          id, client_id, provider_id, service_id, service_subtype, description, status,
           location_lat, location_lng, open_job_id, agreed_value, accepted_at,
           created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, 'accepted', $6, $7, $8, $9, $10, $10, $10)`,
+        ) VALUES ($1, $2, $3, $4, $5, $6, 'accepted', $7, $8, $9, $10, $11, $11, $11)`,
         [
           params.requestId,
           params.clientId,
           params.providerId,
           params.serviceId,
+          params.serviceSubtype,
           params.description,
           params.locationLat,
           params.locationLng,

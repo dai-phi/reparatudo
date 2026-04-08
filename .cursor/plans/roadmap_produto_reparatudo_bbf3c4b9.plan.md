@@ -178,3 +178,9 @@ Você pediu: **cliente escolhe entre** (A) prestador específico ou (B) sem pref
 - **Preços guia** (faixas) por serviço para educar cliente e reduzir atrito na negociação.
 - **SLA de resposta** e “prestadores mais rápidos” (já há métrica `avgResponse`).
 
+## Verificação de valor (atualização 2026-04)
+
+A auditoria do código em relação a este roadmap mostrou que vários itens da seção **“Validação: lacunas principais”** acima já foram endereçados no repositório (por exemplo: recuperação de senha por e-mail, trabalhos abertos com propostas, verificação de prestador com fluxo e tela admin). As lacunas com maior retorno relativo agora giram em torno de **notificações transacionais**, **busca (ordenação/filtros)**, **pagamento real de plano**, **agenda** e **profundidade do chat** — com detalhamento, candidatos priorizados, critérios e métricas em [docs/feature-value-verification.md](../../docs/feature-value-verification.md).
+
+**Shortlist sugerida para o próximo ciclo:** (1) notificações por e-mail para eventos críticos; (2) ordenação e filtros na busca de prestadores; (3) gateway com webhook para assinatura de plano; (4) agenda em MVP; (5) anexos e respostas rápidas no chat.
+

@@ -20,6 +20,7 @@ function mapRequestRow(row: Record<string, unknown>): RequestRecord {
     clientId: String(row.client_id),
     providerId: row.provider_id != null ? String(row.provider_id) : null,
     serviceId,
+    serviceSubtype: row.service_subtype != null ? String(row.service_subtype) : null,
     description: row.description != null ? String(row.description) : null,
     status: String(row.status),
     agreedValue: row.agreed_value != null ? Number(row.agreed_value) : null,
@@ -69,6 +70,7 @@ export class PostgresRequestRepository implements IRequestRepository {
     clientId: string;
     providerId: string;
     serviceId: ServiceId;
+    serviceSubtype: string | null;
     description: string | null;
     status: string;
     locationLat: number | null;
@@ -81,16 +83,17 @@ export class PostgresRequestRepository implements IRequestRepository {
   }): Promise<void> {
     await this.db.query(
       `INSERT INTO requests (
-        id, client_id, provider_id, service_id, description, status,
+        id, client_id, provider_id, service_id, service_subtype, description, status,
         location_lat, location_lng, open_job_id, agreed_value, accepted_at,
         created_at, updated_at
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
       [
         params.id,
         params.clientId,
         params.providerId,
         params.serviceId,
+        params.serviceSubtype,
         params.description,
         params.status,
         params.locationLat,

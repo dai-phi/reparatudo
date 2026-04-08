@@ -23,6 +23,10 @@ import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
 type UiStatus = "waiting_provider" | "negotiating" | "confirmed" | "cancelled" | "completed";
 
+function formatServiceWithSubtype(service: string, subtypeLabel?: string | null) {
+  return subtypeLabel ? `${service} — ${subtypeLabel}` : service;
+}
+
 const getUiStatus = (status?: string): UiStatus => {
   switch (status) {
     case "open":
@@ -282,13 +286,20 @@ const Chat = () => {
             <div>
               <p className="font-semibold text-primary-foreground">{headerName}</p>
               {isClient && request.provider ? (
-                <div className="flex items-center gap-2 text-xs text-primary-foreground/60">
-                  <Star className="w-3 h-3 text-accent fill-accent" /> {headerRating.toFixed(1)}
-                  <span>•</span>
-                  <MapPin className="w-3 h-3" /> {headerDistance.toFixed(1)} km
+                <div className="space-y-0.5">
+                  <div className="text-xs text-primary-foreground/60">
+                    {formatServiceWithSubtype(request.serviceLabel, request.serviceSubtypeLabel)}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-primary-foreground/60">
+                    <Star className="w-3 h-3 text-accent fill-accent" /> {headerRating.toFixed(1)}
+                    <span>•</span>
+                    <MapPin className="w-3 h-3" /> {headerDistance.toFixed(1)} km
+                  </div>
                 </div>
               ) : (
-                <div className="text-xs text-primary-foreground/60">{request.serviceLabel}</div>
+                <div className="text-xs text-primary-foreground/60">
+                  {formatServiceWithSubtype(request.serviceLabel, request.serviceSubtypeLabel)}
+                </div>
               )}
             </div>
           </div>

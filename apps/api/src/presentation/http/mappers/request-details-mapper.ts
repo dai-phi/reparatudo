@@ -2,6 +2,7 @@ import type { IGeoService } from "../../../domain/ports/geo-service.js";
 import type { IRequestRepository } from "../../../domain/ports/repositories/request-repository.js";
 import type { RequestRecord } from "../../../domain/entities/records.js";
 import { SERVICE_LABELS } from "../../../domain/value-objects/service-id.js";
+import { getServiceSubtypeLabelPt } from "../../../domain/value-objects/service-subtype-catalog.js";
 import { formatCurrency } from "../../../application/utils/format.js";
 
 export type RequestDetailsDto = {
@@ -9,6 +10,8 @@ export type RequestDetailsDto = {
   status: string;
   serviceId: string;
   serviceLabel: string;
+  serviceSubtype: string | null;
+  serviceSubtypeLabel: string | null;
   description: string;
   agreedValue: number;
   agreedValueLabel: string;
@@ -57,6 +60,8 @@ export async function formatRequestDetails(
     status: target.status,
     serviceId: target.serviceId,
     serviceLabel: SERVICE_LABELS[target.serviceId] ?? target.serviceId,
+    serviceSubtype: target.serviceSubtype,
+    serviceSubtypeLabel: getServiceSubtypeLabelPt(target.serviceId, target.serviceSubtype),
     description: target.description || "",
     agreedValue: Number(target.agreedValue || 0),
     agreedValueLabel: formatCurrency(Number(target.agreedValue || 0)),

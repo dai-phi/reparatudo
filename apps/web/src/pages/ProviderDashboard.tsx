@@ -39,6 +39,10 @@ import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
 
+function formatServiceWithSubtype(service: string, subtypeLabel?: string | null) {
+  return subtypeLabel ? `${service} — ${subtypeLabel}` : service;
+}
+
 const isInService = (status?: string) => status === "confirmed";
 
 const requestStatusLabel = (request: RequestSummary) => {
@@ -332,7 +336,9 @@ const ProviderDashboard = () => {
                     className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border hover:border-accent/40 transition-colors"
                   >
                     <div className="min-w-0">
-                      <p className="font-medium text-card-foreground truncate">{job.serviceLabel}</p>
+                      <p className="font-medium text-card-foreground truncate">
+                        {formatServiceWithSubtype(job.serviceLabel, job.serviceSubtypeLabel)}
+                      </p>
                       <p className="text-xs text-muted-foreground line-clamp-1">{job.description}</p>
                       <p className="text-xs text-muted-foreground mt-1 flex items-center gap-3">
                         <span className="flex items-center gap-1">
@@ -381,7 +387,9 @@ const ProviderDashboard = () => {
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <p className="font-semibold text-card-foreground">{item.client}</p>
-                        <p className="text-sm text-muted-foreground">{item.service}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatServiceWithSubtype(item.service, item.serviceSubtypeLabel)}
+                        </p>
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-bold text-accent">{item.value}</p>
@@ -469,7 +477,9 @@ const ProviderDashboard = () => {
                                 </div>
                                 <div>
                                   <p className="font-semibold text-card-foreground">{req.client}</p>
-                                  <p className="text-sm text-muted-foreground">{req.service}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {formatServiceWithSubtype(req.service, req.serviceSubtypeLabel)}
+                                  </p>
                                 </div>
                               </div>
                               <div className="text-right">
@@ -525,7 +535,9 @@ const ProviderDashboard = () => {
                             </div>
                             <div>
                               <p className="font-semibold text-card-foreground">{req.client}</p>
-                              <p className="text-sm text-muted-foreground">{req.service}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {formatServiceWithSubtype(req.service, req.serviceSubtypeLabel)}
+                              </p>
                             </div>
                           </div>
                           <div className="text-right">
