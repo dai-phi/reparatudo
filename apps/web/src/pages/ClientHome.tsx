@@ -22,11 +22,20 @@ import {
   getRequest,
   logout,
   type ProviderCard,
+  type ProviderSearchSort,
 } from "@/lib/api";
 import { useWebsocket, type WebsocketEvent } from "@/lib/websocket";
 import { useAuthUser, useRequireAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -131,6 +140,9 @@ const ClientHome = () => {
   const [requestMode, setRequestMode] = useState<"direct" | "open">("direct");
   const [callModalProvider, setCallModalProvider] = useState<ProviderCard | null>(null);
   const [callDescription, setCallDescription] = useState("");
+  const [providerSort, setProviderSort] = useState<ProviderSearchSort>("recommended");
+  const [providerVerifiedOnly, setProviderVerifiedOnly] = useState(false);
+  const [providerMinRating, setProviderMinRating] = useState<number | null>(null);
 
   const selectedServiceMeta = services.find((service) => service.id === selectedService);
 
@@ -167,8 +179,13 @@ const ClientHome = () => {
   const historicRequests = (clientRequestsQuery.data ?? []).filter((r) => !r.chatOpen);
 
   const providersQuery = useQuery({
-    queryKey: ["providers", selectedService],
-    queryFn: () => getProviders(selectedService || ""),
+    queryKey: ["providers", selectedService, providerSort, providerVerifiedOnly, providerMinRating],
+    queryFn: () =>
+      getProviders(selectedService!, {
+        sort: providerSort,
+        verifiedOnly: providerVerifiedOnly,
+        minRating: providerMinRating ?? undefined,
+      }),
     enabled: Boolean(selectedService) && requestMode === "direct",
   });
 
@@ -580,6 +597,62 @@ const ClientHome = () => {
                   )}
                 </div>
 
+                {!pendingRequestId && requestMode === "direct" && (
+                  <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/20 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+                    <div className="min-w-[200px] flex-1 space-y-1.5">
+                      <Label htmlFor="provider-sort" className="text-xs text-muted-foreground">
+                        Ordenar por
+                      </Label>
+                      <Select
+                        value={providerSort}
+                        onValueChange={(v) => setProviderSort(v as ProviderSearchSort)}
+                      >
+                        <SelectTrigger id="provider-sort" className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="recommended">Melhor combinação</SelectItem>
+                          <SelectItem value="distance">Mais próximos</SelectItem>
+                          <SelectItem value="rating">Melhor avaliação</SelectItem>
+                          <SelectItem value="response_time">Resposta mais rápida</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="min-w-[160px] flex-1 space-y-1.5">
+                      <Label htmlFor="provider-min-rating" className="text-xs text-muted-foreground">
+                        Nota mínima
+                      </Label>
+                      <Select
+                        value={providerMinRating === null ? "any" : String(providerMinRating)}
+                        onValueChange={(v) => {
+                          if (v === "any") setProviderMinRating(null);
+                          else setProviderMinRating(Number(v));
+                        }}
+                      >
+                        <SelectTrigger id="provider-min-rating" className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="any">Qualquer</SelectItem>
+                          <SelectItem value="3">3 estrelas ou mais</SelectItem>
+                          <SelectItem value="4">4 estrelas ou mais</SelectItem>
+                          <SelectItem value="4.5">4,5 estrelas ou mais</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center gap-2 pb-0.5 sm:pb-1">
+                      <Checkbox
+                        id="provider-verified-only"
+                        checked={providerVerifiedOnly}
+                        onCheckedChange={(c) => setProviderVerifiedOnly(c === true)}
+                      />
+                      <Label htmlFor="provider-verified-only" className="text-sm font-normal cursor-pointer">
+                        Só prestadores verificados
+                      </Label>
+                    </div>
+                  </div>
+                )}
+
                 {pendingRequestId ? (
                   <Card className="border-accent/30 bg-accent/5 shadow-card">
                     <CardHeader className="pb-2">
@@ -693,6 +766,11 @@ const ClientHome = () => {
                               <Star className="w-4 h-4 text-warning fill-warning" />
                               {provider.rating.toFixed(1)} • Tempo médio: {avgLabel}
                             </div>
+                            {providerSort === "recommended" && provider.matchScore != null && (
+                              <p className="text-xs text-muted-foreground">
+                                Combinação: {provider.matchScore.toFixed(1)} / 100
+                              </p>
+                            )}
                             <p className="text-xs text-muted-foreground">Distância: {provider.distanceKm ?? "--"} km</p>
                             {provider.lastServiceDistanceKm != null && (
                               <p className="text-xs text-muted-foreground">

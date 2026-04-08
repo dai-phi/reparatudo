@@ -266,6 +266,8 @@ export interface ChatMessage {
   time: string;
 }
 
+export type ProviderSearchSort = "recommended" | "distance" | "rating" | "response_time";
+
 export interface ProviderCard {
   id: string;
   name: string;
@@ -278,6 +280,8 @@ export interface ProviderCard {
   radiusKm: number;
   verificationStatus?: VerificationStatus;
   isVerified?: boolean;
+  /** Combined match score (0–100), when returned by search; higher is better. */
+  matchScore?: number;
 }
 
 export interface ProviderVerification {
@@ -819,8 +823,17 @@ export function submitOpenJobQuote(
   return apiFetch<{ quoteId: string }>(`/open-jobs/${openJobId}/quotes`, { method: "POST", auth: true, body: payload });
 }
 
-export function getProviders(serviceId: string) {
-  return apiFetch<ProviderCard[]>(`/providers?serviceId=${serviceId}`, { auth: true });
+export function getProviders(
+  serviceId: string,
+  options?: { sort?: ProviderSearchSort; verifiedOnly?: boolean; minRating?: number }
+) {
+  const params = new URLSearchParams({ serviceId });
+  params.set("sort", options?.sort ?? "recommended");
+  if (options?.verifiedOnly) params.set("verifiedOnly", "true");
+  if (options?.minRating != null && options.minRating > 0) {
+    params.set("minRating", String(options.minRating));
+  }
+  return apiFetch<ProviderCard[]>(`/providers?${params.toString()}`, { auth: true });
 }
 
 export function getRequest(id: string) {
