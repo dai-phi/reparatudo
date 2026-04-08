@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import {
   Wrench, Zap, Droplets, PaintBucket, Hammer, User, Bell, LogOut,
   Search, ArrowRight, Loader2, ClipboardList, Star, MessageSquare, ShieldCheck,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -59,6 +60,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { UI_ERRORS, UI_MESSAGES } from "@/value-objects/messages";
+import { ClientOpenJobsListContent, type ChamadosSituation } from "@/components/client/client-open-jobs-list-content";
 
 /** Tailwind classes for request status chips (client request list). */
 function clientRequestStatusBadgeClass(status: string): string {
@@ -90,6 +92,8 @@ const services = [
 function formatServiceWithSubtype(service: string, subtypeLabel?: string | null) {
   return subtypeLabel ? `${service} — ${subtypeLabel}` : service;
 }
+
+const HISTORICO_PAGE_SIZE = 6;
 
 const RATING_TAGS = [
   { id: "pontual", label: "Pontual" },
@@ -126,7 +130,11 @@ const StarRating = ({ rating, onRate, interactive = true }: { rating: number; on
   );
 };
 
-type LocationState = { openHistory?: boolean; rateRequestId?: string } | null;
+type LocationState = {
+  openHistory?: boolean;
+  rateRequestId?: string;
+  openRequestedChamados?: boolean;
+} | null;
 
 const ClientHome = () => {
   const navigate = useNavigate();
@@ -135,7 +143,10 @@ const ClientHome = () => {
   const { data: me } = useAuthUser();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"request" | "requested" | "history">("request");
+  const [requestedMain, setRequestedMain] = useState<"services" | "openJobs">("services");
   const [requestedSegment, setRequestedSegment] = useState<"open" | "historico">("open");
+  const [historicoPage, setHistoricoPage] = useState(1);
+  const [chamadosSituation, setChamadosSituation] = useState<ChamadosSituation>("open");
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
@@ -174,6 +185,12 @@ const ClientHome = () => {
       queryClient.invalidateQueries({ queryKey: ["clientHistory"] });
       toast.success(UI_MESSAGES.request.completedAndRatePrompt);
       navigate(location.pathname, { replace: true, state: {} });
+      return;
+    }
+    if (state?.openRequestedChamados) {
+      setActiveTab("requested");
+      setRequestedMain("openJobs");
+      navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, location.pathname, navigate, queryClient]);
 
@@ -191,6 +208,15 @@ const ClientHome = () => {
 
   const openRequests = (clientRequestsQuery.data ?? []).filter((r) => r.chatOpen);
   const historicRequests = (clientRequestsQuery.data ?? []).filter((r) => !r.chatOpen);
+  const historicoTotalPages = Math.max(1, Math.ceil(historicRequests.length / HISTORICO_PAGE_SIZE));
+  const historicRequestsPage = historicRequests.slice(
+    (historicoPage - 1) * HISTORICO_PAGE_SIZE,
+    historicoPage * HISTORICO_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    setHistoricoPage((p) => Math.min(p, historicoTotalPages));
+  }, [historicoTotalPages]);
 
   const providersQuery = useQuery({
     queryKey: ["providers", selectedService, providerSort, providerVerifiedOnly, providerMinRating],
@@ -366,12 +392,6 @@ const ClientHome = () => {
               <LogOut className="w-5 h-5" />
             </button>
             <Link
-              to="/client/open-jobs"
-              className="hidden sm:inline-flex text-sm text-muted-foreground hover:text-foreground px-2"
-            >
-              Chamados abertos
-            </Link>
-            <Link
               to="/client/perfil"
               className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center"
               title="Meu perfil"
@@ -410,109 +430,223 @@ const ClientHome = () => {
             <div>
               <h1 className="font-display text-2xl font-bold text-foreground mb-1">Serviços Solicitados</h1>
               <p className="text-muted-foreground">
-                Em aberto você pode conversar com o prestador. No histórico, apenas visualização.
+                Em Serviços, acompanhe conversas com prestadores (em aberto ou histórico). Em Chamados, veja pedidos publicados à região e
+                propostas recebidas.
               </p>
             </div>
 
-            <div className="flex gap-1 bg-muted rounded-xl p-1 w-fit">
-              {(
-                [
-                  { key: "open" as const, label: "Em aberto" },
-                  { key: "historico" as const, label: "Histórico" },
-                ] as const
-              ).map((seg) => (
-                <button
-                  key={seg.key}
-                  type="button"
-                  onClick={() => setRequestedSegment(seg.key)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    requestedSegment === seg.key
-                      ? "bg-card shadow-sm text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {seg.label}
-                </button>
-              ))}
-            </div>
-
-            {clientRequestsQuery.isLoading ? (
-              <div className="text-center py-12 text-muted-foreground">Carregando...</div>
-            ) : clientRequestsQuery.isError ? (
-              <div className="text-center py-12 text-muted-foreground">Não foi possível carregar os pedidos.</div>
-            ) : requestedSegment === "open" ? (
-              openRequests.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground rounded-xl border border-dashed border-border">
-                  Nenhum serviço em aberto. Solicite um novo serviço na aba anterior.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {openRequests.map((r) => (
-                    <motion.button
-                      key={r.id}
-                      type="button"
-                      layout
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      onClick={() => navigate(`/chat/${r.id}`)}
-                      className="w-full text-left p-5 rounded-xl bg-card shadow-card border border-border hover:border-accent/40 transition-colors flex items-start gap-4"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <p className="font-semibold text-card-foreground">{r.provider}</p>
-                          <Badge
-                            variant="secondary"
-                            className={cn("font-normal border", clientRequestStatusBadgeClass(r.status))}
-                          >
-                            {r.statusLabel}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {formatServiceWithSubtype(r.service, r.serviceSubtypeLabel)} • {r.time}
-                        </p>
-                        <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{r.desc}</p>
-                      </div>
-                      <ArrowRight className="w-5 h-5 text-muted-foreground shrink-0 mt-1" />
-                    </motion.button>
-                  ))}
-                </div>
-              )
-            ) : historicRequests.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground rounded-xl border border-dashed border-border">
-                Nenhum pedido no histórico ainda.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {historicRequests.map((r) => (
-                  <motion.button
-                    key={r.id}
+            <div className="flex flex-wrap items-center gap-3 justify-between">
+              <div className="flex gap-1 bg-muted rounded-xl p-1 w-fit flex-wrap">
+                {(
+                  [
+                    { key: "services" as const, label: "Serviços" },
+                    { key: "openJobs" as const, label: "Chamados" },
+                  ] as const
+                ).map((seg) => (
+                  <button
+                    key={seg.key}
                     type="button"
-                    layout
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    onClick={() => navigate(`/chat/${r.id}`)}
-                    className="w-full text-left p-5 rounded-xl bg-card shadow-card border border-border hover:border-accent/40 transition-colors flex items-start gap-4"
+                    onClick={() => {
+                      setRequestedMain(seg.key);
+                      if (seg.key === "openJobs") setChamadosSituation("open");
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      requestedMain === seg.key
+                        ? "bg-card shadow-sm text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <p className="font-semibold text-card-foreground">{r.provider}</p>
-                        <Badge
-                          variant="outline"
-                          className={cn("font-normal border", clientRequestStatusBadgeClass(r.status))}
-                        >
-                          {r.statusLabel}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {formatServiceWithSubtype(r.service, r.serviceSubtypeLabel)} • {r.time}
-                      </p>
-                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{r.desc}</p>
-                      <p className="text-xs text-muted-foreground/80 mt-2">Somente leitura</p>
-                    </div>
-                    <ArrowRight className="w-5 h-5 text-muted-foreground shrink-0 mt-1" />
-                  </motion.button>
+                    {seg.label}
+                  </button>
                 ))}
               </div>
+              {requestedMain === "services" ? (
+                <div
+                  className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 shrink-0 max-sm:w-full sm:ml-auto"
+                  role="group"
+                  aria-label="Período da lista de serviços"
+                >
+                  <div className="inline-flex rounded-full border border-border/80 bg-background/80 p-0.5 shadow-sm">
+                    {(
+                      [
+                        { key: "open" as const, label: "Em aberto" },
+                        { key: "historico" as const, label: "Histórico" },
+                      ] as const
+                    ).map((seg) => (
+                      <button
+                        key={seg.key}
+                        type="button"
+                        onClick={() => {
+                          setRequestedSegment(seg.key);
+                          setHistoricoPage(1);
+                        }}
+                        className={cn(
+                          "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                          requestedSegment === seg.key
+                            ? "bg-accent text-accent-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {seg.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 shrink-0 max-sm:w-full sm:ml-auto"
+                  role="group"
+                  aria-label="Situação dos chamados"
+                >
+                  <div className="inline-flex rounded-full border border-border/80 bg-background/80 p-0.5 shadow-sm">
+                    {(
+                      [
+                        { key: "open" as const, label: "Em aberto" },
+                        { key: "closed" as const, label: "Encerrados" },
+                      ] as const
+                    ).map((seg) => (
+                      <button
+                        key={seg.key}
+                        type="button"
+                        onClick={() => setChamadosSituation(seg.key)}
+                        className={cn(
+                          "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                          chamadosSituation === seg.key
+                            ? "bg-accent text-accent-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {seg.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {requestedMain === "services" ? (
+              <>
+                {clientRequestsQuery.isLoading ? (
+                  <div className="text-center py-12 text-muted-foreground">Carregando...</div>
+                ) : clientRequestsQuery.isError ? (
+                  <div className="text-center py-12 text-muted-foreground">Não foi possível carregar os pedidos.</div>
+                ) : requestedSegment === "open" ? (
+                  openRequests.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground rounded-xl border border-dashed border-border">
+                      Nenhum serviço em aberto. Solicite um novo serviço na aba anterior.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {openRequests.map((r) => (
+                        <motion.button
+                          key={r.id}
+                          type="button"
+                          layout
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          onClick={() => navigate(`/chat/${r.id}`)}
+                          className="w-full text-left p-5 rounded-xl bg-card shadow-card border border-border hover:border-accent/40 transition-colors flex items-start gap-4"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                              <p className="font-semibold text-card-foreground">{r.provider}</p>
+                              <Badge
+                                variant="secondary"
+                                className={cn("font-normal border", clientRequestStatusBadgeClass(r.status))}
+                              >
+                                {r.statusLabel}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {formatServiceWithSubtype(r.service, r.serviceSubtypeLabel)} • {r.time}
+                            </p>
+                            <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{r.desc}</p>
+                          </div>
+                          <ArrowRight className="w-5 h-5 text-muted-foreground shrink-0 mt-1" />
+                        </motion.button>
+                      ))}
+                    </div>
+                  )
+                ) : historicRequests.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground rounded-xl border border-dashed border-border">
+                    Nenhum pedido no histórico ainda.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {historicRequestsPage.map((r) => (
+                      <motion.button
+                        key={r.id}
+                        type="button"
+                        layout
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        onClick={() => navigate(`/chat/${r.id}`)}
+                        className="w-full text-left p-5 rounded-xl bg-card shadow-card border border-border hover:border-accent/40 transition-colors flex items-start gap-4"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <p className="font-semibold text-card-foreground">{r.provider}</p>
+                            <Badge
+                              variant="outline"
+                              className={cn("font-normal border", clientRequestStatusBadgeClass(r.status))}
+                            >
+                              {r.statusLabel}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {formatServiceWithSubtype(r.service, r.serviceSubtypeLabel)} • {r.time}
+                          </p>
+                          <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{r.desc}</p>
+                          <p className="text-xs text-muted-foreground/80 mt-2">Somente leitura</p>
+                        </div>
+                        <ArrowRight className="w-5 h-5 text-muted-foreground shrink-0 mt-1" />
+                      </motion.button>
+                    ))}
+                    {historicoTotalPages > 1 ? (
+                      <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm text-muted-foreground">
+                          {(historicoPage - 1) * HISTORICO_PAGE_SIZE + 1}–
+                          {Math.min(historicoPage * HISTORICO_PAGE_SIZE, historicRequests.length)} de {historicRequests.length} · Página{" "}
+                          {historicoPage} de {historicoTotalPages}
+                        </p>
+                        <div className="flex gap-2 sm:justify-end">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={historicoPage <= 1}
+                            onClick={() => setHistoricoPage((p) => Math.max(1, p - 1))}
+                            className="gap-1"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                            Anterior
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={historicoPage >= historicoTotalPages}
+                            onClick={() => setHistoricoPage((p) => Math.min(historicoTotalPages, p + 1))}
+                            className="gap-1"
+                          >
+                            Próxima
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </>
+            ) : (
+              <ClientOpenJobsListContent
+                showIntro={false}
+                situation={chamadosSituation}
+                onSituationChange={setChamadosSituation}
+                onEmptyGoToNovoServico={() => {
+                  setActiveTab("request");
+                }}
+              />
             )}
           </div>
         ) : activeTab === "request" ? (
@@ -757,7 +891,9 @@ const ClientHome = () => {
                         size="sm"
                         onClick={() => {
                           setActiveTab("requested");
+                          setRequestedMain("services");
                           setRequestedSegment("open");
+                          setHistoricoPage(1);
                         }}
                       >
                         {UI_MESSAGES.request.viewInRequestedServices}
@@ -813,7 +949,18 @@ const ClientHome = () => {
                         )}
                       </Button>
                       <p className="text-xs text-muted-foreground mt-3">
-                        Acompanhe em <Link className="text-accent underline" to="/client/open-jobs">Chamados abertos</Link>.
+                        Acompanhe em{" "}
+                        <button
+                          type="button"
+                          className="text-accent underline underline-offset-2 hover:opacity-90"
+                          onClick={() => {
+                            setActiveTab("requested");
+                            setRequestedMain("openJobs");
+                          }}
+                        >
+                          Serviços Solicitados → Chamados
+                        </button>
+                        .
                       </p>
                     </CardContent>
                   </Card>

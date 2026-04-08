@@ -88,7 +88,7 @@ const ClientOpenJobDetail = () => {
       <header className="sticky top-0 z-50 bg-card border-b border-border">
         <div className="container flex items-center gap-3 h-14">
           <Button variant="ghost" size="icon" asChild>
-            <Link to="/client/open-jobs" aria-label="Voltar">
+            <Link to="/client/home" state={{ openRequestedChamados: true }} aria-label="Voltar">
               <ArrowLeft className="w-5 h-5" />
             </Link>
           </Button>
